@@ -1,0 +1,74 @@
+# -----------------------------
+# Dependencies
+# -----------------------------
+node_modules/
+viewer-app/node_modules/
+
+# -----------------------------
+# Build and coverage outputs
+# -----------------------------
+dist/
+build/
+viewer-app/dist/
+coverage/
+.nyc_output/
+
+# -----------------------------
+# Logs
+# -----------------------------
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+pnpm-debug.log*
+
+# -----------------------------
+# Environment files
+# -----------------------------
+.env
+.env.*
+!.env.example
+!.env.sample
+
+# -----------------------------
+# Python cache and virtual env
+# -----------------------------
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.ipynb_checkpoints/
+
+# -----------------------------
+# OS and editor files
+# -----------------------------
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# -----------------------------
+# Runtime generated project data
+# Keep source-like map/osm assets trackable.
+# -----------------------------
+storage/images/
+storage/map_extracted/debug/
+storage/map_extracted/rendered/
+storage/map_extracted/edits/
+storage/maps/images/
+storage/maps/*.json
+
+# -----------------------------
+# Temporary and cache files
+# -----------------------------
+.cache/
+tmp/
+*.tmp
+

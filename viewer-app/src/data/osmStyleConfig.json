@@ -1,0 +1,168 @@
+{
+  "defaultStyle": {
+    "stroke": "#166a73",
+    "strokeWidth": 1.15,
+    "scaleStrokeWidth": false,
+    "lineDash": [],
+    "scaleLineDash": true,
+    "layer": 0,
+    "fill": null
+  },
+  "rules": [
+    {
+      "name": "Buildings",
+      "tags": [
+        { "building": "*" },
+        { "building:part": "*" },
+        { "indoor": "*" }
+      ],
+      "style": {
+        "stroke": "#7f4f24",
+        "strokeWidth": 1.2,
+        "fill": "rgba(189, 122, 65, 0.22)"
+      }
+    },
+    {
+      "name": "Water",
+      "tags": {
+        "natural": "water"
+      },
+      "style": {
+        "stroke": "#2b7a9b",
+        "strokeWidth": 1.1,
+        "fill": "rgba(72, 162, 198, 0.28)"
+      }
+    },
+    {
+      "name": "Parks",
+      "tags": {
+        "leisure": ["park", "garden"]
+      },
+      "style": {
+        "stroke": "#4c8a43",
+        "strokeWidth": 1.1,
+        "fill": "rgba(99, 164, 91, 0.24)"
+      }
+    },
+    {
+      "name": "Railways",
+      "tags": {
+        "railway": "*"
+      },
+      "style": {
+        "stroke": "rgba(4, 99, 201, 0.8)",
+        "strokeWidth": 2.2,
+        "fill": null,
+        "scaleStrokeWidth": true
+      }
+    },
+    {
+      "name": "motorway",
+      "tags": {
+        "highway": "tertiary"
+      },
+      "style": {
+        "scaleStrokeWidth": true,
+        "stroke": "#a9acb0",
+        "strokeWidth": 10,
+        "fill": null,
+        "layer": -10
+      }
+    },
+    {
+        "name": "pedestrian",
+        "tags": {
+            "highway": "pedestrian"
+        },
+        "style": {
+            "stroke": "#12b5a7",
+            "strokeWidth": 2,
+            "fill": "rgba(18, 181, 167, 0.22)"
+        }
+    },
+    {
+        "name": "footway-crossing",
+        "tags": {
+            "highway": "footway",
+            "footway": "crossing"
+        },
+        "style": {
+            "stroke": "#12b5a7",
+            "strokeWidth": 1,
+            "fill": null,
+            "lineDash": [6, 3]
+        }
+    },
+    {
+        "name": "footway-covered",
+        "tags": {
+            "highway": "footway",
+            "level": -0.5
+        },
+        "style": {
+            "stroke": "rgba(18, 181, 167, 0.22)",
+            "strokeWidth": 1,
+            "fill": null
+        }
+    },
+    {
+        "name": "footway-bridge",
+        "tags": {
+            "highway": "footway",
+            "bridge": "*"
+        },
+        "style": {
+            "stroke": "#048ec9",
+            "strokeWidth": 1,
+            "fill": null,
+            "layer": 12
+        }
+    },
+    {
+        "name": "footway",
+        "tags": [
+            { "highway": "footway" }
+        ],
+        "style": {
+            "stroke": "#12b5a7",
+            "strokeWidth": 1,
+            "fill": null,
+            "layer": 10
+        }
+    },
+    {
+        "name": "steps",
+        "tags": {
+            "highway": "steps"
+        },
+        "style": {
+            "stroke": "#04abc9",
+            "strokeWidth": 2,
+            "fill": null,
+            "lineDash": [1, 2],
+            "layer": 10
+        }
+    },
+    {   
+      "name": "bridge",
+      "tags": {
+        "bridge": "*"
+      },
+      "style": {
+        "layer": 20
+      }
+    },
+    {
+        "name": "big-sight-area",
+        "tags": {
+            "landuse": "commercial"
+        },
+        "style": {
+            "stroke": "rgba(205, 100, 209, 0.5)",
+            "strokeWidth": 2,
+            "fill": "rgba(205, 100, 209, 0.22)",
+            "layer": -100
+        }
+    }
+  ]
+}

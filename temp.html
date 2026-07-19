@@ -1,0 +1,101 @@
+
+<tr class="infotable-sep"><td colspan="5">&nbsp;</td></tr>
+<tr class="webcatalog-circle-list-detail" data-bind="attr: { id: Id }" id="23011301">
+    <td rowspan="3" class="infotable-box infotable-space favorite-color favorite-color-2" data-bind="css: favCss2()"></td>
+    <td class="circle-cut" rowspan="3">
+        <div>
+            <a data-bind="attr: {href: DetailUrl() },foreach:SwitchingCutUrls3()" href="/Circle/23011301">
+                <div class="img-circlecut"><img class="img-circlecut img-webcirclecutlist" data-bind="attr: {src : $data }" src="/Spa/CachedImage/23011301/2/a44aa9e2-3ffe-41ee-8d70-e3d419d7551a/3984794389709"></div>
+            
+                <div class="img-circlecut"><img class="img-circlecut img-webcirclecutlist" data-bind="attr: {src : $data }" src="/Spa/CachedImage/23011302/2/ca6df0cd-84fd-49c7-9364-152eb334ec85/3984794391164"></div>
+            </a>
+        </div>
+    </td>
+    <td class="infotable-space">
+        <span data-bind="visible: !IsReject"><span data-bind="text: HaichiStr">日曜日 東ア49ab</span></span>
+        <span data-bind="visible: IsReject" style="display: none;">抽選洩れ</span>
+    </td>
+    <td class="infotable-circlename">
+        <a data-bind="attr: {href: DetailUrl() }, text: Name" href="/Circle/23011301">ぱんのみみ</a>
+    </td>
+    <td class="infotable-left infotable-genre" data-bind="text: Genre">男性向</td>
+</tr>
+<tr>
+    <td class="infotable-left" colspan="3"><a class="c-btn c-btn--blue" data-bind="visible: !favMemoEditing() &amp;&amp; favorite(), click: clickFavMemoEdit" style="">メモ編集</a>
+        <span data-bind="text: favMemo(), visible: !favMemoEditing(), click: clickFavMemoEdit">bun</span>
+        <input style="width: 85%; display: none;" data-bind="value: favMemo, visible: favMemoEditing()" maxlength="2048">
+        <a class="c-btn c-btn--orange js-btn-action" data-bind="visible: favMemoEditing(), click: clickFavMemoSave" style="display: none;">完了</a>
+    </td>
+</tr>
+<tr>
+    <td colspan="3">
+        <div class="md-support">
+            <ul class="support-list">
+                <li><img class="support-list-new" src="/common/images/common/img_icon_new_off.png" alt="NEW" data-bind="style: {cursor: IsNew ? 'pointer' : 'default'},attr: { src: NewIcon() }" style="cursor: default;"></li>
+                <li><img class="support-list-kokuti" src="/common/images/common/img_icon_kokuti_off.png" alt="告知画像" data-bind="style: {cursor: HasKokutiImage ? 'pointer' : 'default'},attr: { src: KokutiIcon() }, click: function() { return GoToDetail('#kokuti'); }" style="cursor: default;"></li>
+                <li><img class="support-list-hanpu" src="/common/images/common/img_icon_hanpu_off.png" alt="頒布予定" data-bind="style: {cursor: HasHanpuImage ? 'pointer' : 'default'},attr: { src: HanpuIcon() }, click: function() { return GoToDetail('#hanpu'); }" style="cursor: default;"></li>
+                <li><img class="support-list-pixiv" src="/common/images/common/img_icon_pixiv_on.png" alt="pixiv" data-bind="style: {cursor: IsPixivRegistered ? 'pointer' : 'default'},attr: { src: PixivIcon() }, click: function() { return GoToDetail('#'); }" style="cursor: pointer;"></li>
+                <li><img class="support-list-twitter" src="/common/images/common/img_icon_twitter_on.png" alt="X(Twitter)" data-bind="style: {cursor: IsTwitterRegistered ? 'pointer' : 'default'},attr: { src: TwitterIcon() }, click: function() { return GoToDetail('#'); }" style="cursor: pointer;"></li>
+                <li><img class="support-list-niconico" src="/common/images/common/img_icon_nico_off.png" alt="ニコニコ動画" data-bind="style: {cursor: IsNiconicoRegistered ? 'pointer' : 'default'},attr: { src: NicoIcon() }, click: function() { return GoToDetail('#'); }" style="cursor: default;"></li>
+                <li><img class="support-list-clipstudio" src="/common/images/common/img_icon_clipstudio_off.png" alt="CLIPSTUDIO" data-bind="style: {cursor: IsClipstudioRegistered ? 'pointer' : 'default'},attr: { src: ClipstudioIcon() }, click: function() { return GoToDetail('#'); }" style="cursor: default;"></li>
+                <li><img class="support-list-myhome" src="/common/images/common/img_icon_myhome_on.png" alt="Webサイト" data-bind="style: {cursor: WebSite ? 'pointer' : 'default'},attr: { src: WebSiteIcon() }, click: GoToWeb" style="cursor: pointer;"></li>
+                <li><img class="support-list-book" src="/common/images/common/img_icon_book_on.png" alt="書店" data-bind="style: {cursor: IsOnlineBooksRegistered ? 'pointer' : 'default'},attr: { src: BookIcon() }, click: function() { return GoToDetail('#books'); }" style="cursor: pointer;"></li>
+                <li><a href="https://portal.circle.ms/Circle/Index/10017116" target="_blank" data-bind="attr : { href: CircleId &gt; 0 ? ('https://portal.circle.ms/Circle/Index/'+CircleId) : '' }"><img class="" data-bind="attr : { src: CirclemsIcon() }" src="/common/images/common/img_icon_circle_on.png" alt="Circle.ms"></a></li>
+                <li><img class="support-list-cashless" src="/common/images/common/img_icon_cashless_off.png" alt="キャッシュレス決済利用可" data-bind="style: {cursor: ( CanCashless ? 'pointer' : 'default')},attr: { src: CashlessIcon() }" style="cursor: default;"></li>
+            </ul>
+            <div class="webcatalog-favorite-dialog-color">
+                <ul class="m-colorbox-list">
+                        <li>
+                            <label>
+                                <span class="c-block" style="background-color: #FF944A"><input type="radio" value="1" data-bind="checked: favColor, attr: { name: 'favColor' + Id }" name="favColor23011301"></span>
+                            </label>
+                        </li>
+                        <li>
+                            <label>
+                                <span class="c-block" style="background-color: #FF00FF"><input type="radio" value="2" data-bind="checked: favColor, attr: { name: 'favColor' + Id }" name="favColor23011301"></span>
+                            </label>
+                        </li>
+                        <li>
+                            <label>
+                                <span class="c-block" style="background-color: #FFF700"><input type="radio" value="3" data-bind="checked: favColor, attr: { name: 'favColor' + Id }" name="favColor23011301"></span>
+                            </label>
+                        </li>
+                        <li>
+                            <label>
+                                <span class="c-block" style="background-color: #00B54A"><input type="radio" value="4" data-bind="checked: favColor, attr: { name: 'favColor' + Id }" name="favColor23011301"></span>
+                            </label>
+                        </li>
+                        <li>
+                            <label>
+                                <span class="c-block" style="background-color: #00B5FF"><input type="radio" value="5" data-bind="checked: favColor, attr: { name: 'favColor' + Id }" name="favColor23011301"></span>
+                            </label>
+                        </li>
+                        <li>
+                            <label>
+                                <span class="c-block" style="background-color: #9C529C"><input type="radio" value="6" data-bind="checked: favColor, attr: { name: 'favColor' + Id }" name="favColor23011301"></span>
+                            </label>
+                        </li>
+                        <li>
+                            <label>
+                                <span class="c-block" style="background-color: #0000FF"><input type="radio" value="7" data-bind="checked: favColor, attr: { name: 'favColor' + Id }" name="favColor23011301"></span>
+                            </label>
+                        </li>
+                        <li>
+                            <label>
+                                <span class="c-block" style="background-color: #00FF00"><input type="radio" value="8" data-bind="checked: favColor, attr: { name: 'favColor' + Id }" name="favColor23011301"></span>
+                            </label>
+                        </li>
+                        <li>
+                            <label>
+                                <span class="c-block" style="background-color: #FF0000"><input type="radio" value="9" data-bind="checked: favColor, attr: { name: 'favColor' + Id }" name="favColor23011301"></span>
+                            </label>
+                        </li>
+                </ul>
+            </div>
+            <p class="md-btn">
+                <a class="c-btn js-btn-add" title="お気に入りに追加" data-bind="visible: !favorite(), enabled: false" style="display: none;">未登録</a>
+                <a href="#" class="c-btn c-btn--action js-btn-remove" title="お気に入りを解除" data-bind="visible: favorite(), click: ClearFav" style="">登録解除</a>
+            </p>
+        </div>
+    </td>
+</tr>

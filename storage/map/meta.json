@@ -1,0 +1,19 @@
+{
+  "saveId": "20260702-204414-du0s7e",
+  "createdAt": "2026-07-02T12:44:14.916Z",
+  "pageCount": 4,
+  "totalBooths": 11622,
+  "pageFiles": [
+    "page-1.json",
+    "page-2.json",
+    "page-3.json",
+    "page-4.json"
+  ],
+  "summaryMeta": {
+    "sourcePdfPath": "storage/map.pdf",
+    "renderDpi": 200,
+    "startPage": 1,
+    "endPage": 4,
+    "outputRoot": "storage/map_extracted"
+  }
+}
