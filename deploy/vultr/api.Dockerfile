@@ -21,7 +21,7 @@ COPY package.json package-lock.json ./
 RUN npm ci --omit=dev
 
 COPY requirements-map.txt ./
-RUN pip3 install --no-cache-dir -r requirements-map.txt
+RUN pip3 install --break-system-packages --no-cache-dir -r requirements-map.txt
 
 COPY src ./src
 

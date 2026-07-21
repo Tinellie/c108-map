@@ -71,3 +71,5 @@ storage/**
 tmp/
 *.tmp
 
+temp.html
+temp2.html
