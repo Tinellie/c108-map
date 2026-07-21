@@ -6,30 +6,112 @@ function trimText(value) {
   return (value || "").replace(/\s+/g, " ").trim();
 }
 
-async function waitForManualLoginIfNeeded(page, profile, title) {
+async function getLoginPageState(page, loginWait, title) {
+  const looksLikeLoginTitle =
+    typeof loginWait?.loginTitleKeyword === "string" &&
+    loginWait.loginTitleKeyword.length > 0 &&
+    title.includes(loginWait.loginTitleKeyword);
+
+  const hasLoginForm = loginWait?.loginFormSelector
+    ? await page.$(loginWait.loginFormSelector).then(Boolean)
+    : false;
+
+  return {
+    looksLikeLoginPage: Boolean(looksLikeLoginTitle || hasLoginForm),
+    hasLoginForm
+  };
+}
+
+async function waitForLoginOutcome(page, loginWait) {
+  const outcomeHandle = await page.waitForFunction(
+    ({ successSelector, invalidCredentialSelector, invalidCredentialText }) => {
+      if (successSelector && document.querySelector(successSelector)) {
+        return "success";
+      }
+
+      if (invalidCredentialSelector) {
+        const errorNode = document.querySelector(invalidCredentialSelector);
+        const errorText = (errorNode?.textContent || "").replace(/\s+/g, " ").trim();
+        if (errorText && (!invalidCredentialText || errorText.includes(invalidCredentialText))) {
+          return "invalid-credentials";
+        }
+      }
+
+      return false;
+    },
+    {
+      timeout: Number(loginWait?.timeoutMs || 300000)
+    },
+    {
+      successSelector: loginWait?.successSelector || "",
+      invalidCredentialSelector: loginWait?.invalidCredentialSelector || "",
+      invalidCredentialText: loginWait?.invalidCredentialText || ""
+    }
+  );
+
+  const outcome = await outcomeHandle.jsonValue();
+  await outcomeHandle.dispose();
+  return outcome;
+}
+
+async function submitLoginForm(page, loginWait, loginCredentials) {
+  await page.waitForSelector(loginWait.usernameSelector, { timeout: 10000 });
+  await page.waitForSelector(loginWait.passwordSelector, { timeout: 10000 });
+
+  await page.locator(loginWait.usernameSelector).fill(String(loginCredentials.username || ""));
+  await page.locator(loginWait.passwordSelector).fill(String(loginCredentials.password || ""));
+
+  await Promise.allSettled([
+    page.waitForNavigation({ waitUntil: "networkidle2", timeout: 15000 }),
+    page.click(loginWait.submitSelector)
+  ]);
+
+  const outcome = await waitForLoginOutcome(page, loginWait);
+  if (outcome === "invalid-credentials") {
+    const error = new Error("Circle.ms 登录失败：邮箱或密码错误");
+    error.code = "INVALID_CIRCLE_MS_CREDENTIALS";
+    throw error;
+  }
+}
+
+export async function ensureLoggedInIfNeeded(page, profile, { loginCredentials } = {}) {
   const loginWait = profile.loginWait;
   if (!loginWait?.enabled) {
     return;
   }
 
-  const looksLikeLoginPage =
-    typeof loginWait.loginTitleKeyword === "string" &&
-    loginWait.loginTitleKeyword.length > 0 &&
-    title.includes(loginWait.loginTitleKeyword);
+  const title = await page.title();
+  const { looksLikeLoginPage } = await getLoginPageState(page, loginWait, title);
 
   if (!looksLikeLoginPage) {
     return;
   }
 
+  const hasCredentials = Boolean(loginCredentials?.username && loginCredentials?.password);
+  if (hasCredentials) {
+    logInfo("Login page detected", "Submitting Circle.ms credentials automatically...");
+    await submitLoginForm(page, loginWait, loginCredentials);
+    logInfo("Circle.ms login detected", "Auto login completed; continuing crawl.");
+    return;
+  }
+
+  await waitForManualLoginIfNeeded(page, profile);
+}
+
+async function waitForManualLoginIfNeeded(page, profile) {
+  const loginWait = profile.loginWait;
+  if (!loginWait?.enabled) {
+    return;
+  }
+
   logInfo("Login page detected", "Waiting for manual login in opened browser window...");
 
-  await page.waitForFunction(
-    (selector) => !!document.querySelector(selector),
-    {
-      timeout: Number(loginWait.timeoutMs || 300000)
-    },
-    loginWait.successSelector
-  );
+  const outcome = await waitForLoginOutcome(page, loginWait);
+  if (outcome === "invalid-credentials") {
+    const error = new Error("Circle.ms 登录失败：邮箱或密码错误");
+    error.code = "INVALID_CIRCLE_MS_CREDENTIALS";
+    throw error;
+  }
 
   logInfo("Manual login detected", "Target table became available; continuing crawl.");
 }
@@ -94,11 +176,11 @@ export async function createScrapeSession({ headlessOverride } = {}) {
   };
 }
 
-export async function scrapeCurrentPage(page, { profile }) {
+export async function scrapeCurrentPage(page, { profile, loginCredentials } = {}) {
   const title = await page.title();
   logInfo("Navigation complete", `title=${title || "(empty)"}`);
 
-  await waitForManualLoginIfNeeded(page, profile, title);
+  await ensureLoggedInIfNeeded(page, profile, { loginCredentials });
 
   if (profile?.selectors?.row) {
     try {
@@ -272,7 +354,7 @@ export async function clickPreviousPage(page, profile) {
   return clickPaginationByKeywords(page, pagination.navLinkSelector, pagination.prevLinkTextIncludes || []);
 }
 
-export async function scrapePage({ url, profile, headlessOverride }) {
+export async function scrapePage({ url, profile, headlessOverride, loginCredentials }) {
   const session = await createScrapeSession({ headlessOverride });
 
   try {
@@ -281,7 +363,7 @@ export async function scrapePage({ url, profile, headlessOverride }) {
     logStep("Navigating to target page", url);
     await page.goto(url, { waitUntil: "networkidle2" });
 
-    return scrapeCurrentPage(page, { profile });
+    return scrapeCurrentPage(page, { profile, loginCredentials });
   } finally {
     await session.close();
   }

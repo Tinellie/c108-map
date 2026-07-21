@@ -89,6 +89,7 @@ export function getCrawlOptions() {
   return {
     defaultUrl: DEFAULT_URL,
     targetUrlLocked: true,
+    supportsCircleMsAutoLogin: true,
     profiles: getProfileOptions(),
     headlessOptions: [
       { value: "env", label: "Use environment default" },
@@ -126,7 +127,9 @@ export function getCrawlOptions() {
       url: `locked to ${DEFAULT_URL}`,
       profile: "string (required, one of profiles)",
       headless: "'env' | 'true' | 'false' (optional, default 'env')",
-      crawlMode: `'full_list_full_detail' | 'full_list_new_detail' | 'new_list_new_detail' | 'list_only' (optional, default '${DEFAULT_CRAWL_MODE}')`
+      crawlMode: `'full_list_full_detail' | 'full_list_new_detail' | 'new_list_new_detail' | 'list_only' (optional, default '${DEFAULT_CRAWL_MODE}')`,
+      loginUsername: "string (optional, Circle.ms email)",
+      loginPassword: "string (optional, Circle.ms password)"
     }
   };
 }
@@ -164,6 +167,8 @@ export function startCrawlJob(input) {
   const profileName = String(input?.profile || "circle-favorites").trim();
   const headlessRaw = String(input?.headless || "env").trim();
   const crawlMode = String(input?.crawlMode || DEFAULT_CRAWL_MODE).trim();
+  const loginUsername = String(input?.loginUsername || "").trim();
+  const loginPassword = String(input?.loginPassword || "");
   const profile = getProfileByName(profileName);
 
   if (!profile) {
@@ -181,6 +186,12 @@ export function startCrawlJob(input) {
   const allowedModes = new Set(["full_list_full_detail", "full_list_new_detail", "new_list_new_detail", "list_only"]);
   if (!allowedModes.has(crawlMode)) {
     const error = new Error("crawlMode is invalid");
+    error.code = "INVALID_INPUT";
+    throw error;
+  }
+
+  if ((loginUsername && !loginPassword) || (!loginUsername && loginPassword)) {
+    const error = new Error("loginUsername and loginPassword must be provided together");
     error.code = "INVALID_INPUT";
     throw error;
   }
@@ -233,6 +244,9 @@ export function startCrawlJob(input) {
     profile,
     headlessOverride,
     crawlMode,
+    loginCredentials: loginUsername && loginPassword
+      ? { username: loginUsername, password: loginPassword }
+      : null,
     onProgress: updateProgress
   })
     .then((summary) => {

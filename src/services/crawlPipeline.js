@@ -1,7 +1,7 @@
 import { ensureSchema } from "../db/setup.js";
 import { loadExistingCircleIdSet, upsertCircleDetails, upsertFavoriteCircles } from "../repositories/crawlRepository.js";
 import { loadColorPaletteMap } from "../repositories/colorPaletteRepository.js";
-import { clickPreviousPage, createScrapeSession, jumpToLastPage, scrapeCurrentPage } from "./scrapeService.js";
+import { clickPreviousPage, createScrapeSession, ensureLoggedInIfNeeded, jumpToLastPage, scrapeCurrentPage } from "./scrapeService.js";
 import { organizeItems } from "../utils/organize.js";
 import { downloadCircleImages } from "./imageDownloadService.js";
 import { scrapeCircleDetail } from "./circleDetailService.js";
@@ -61,6 +61,7 @@ export async function runCrawlPipeline({
   profile,
   headlessOverride,
   crawlMode = "full_list_full_detail",
+  loginCredentials,
   onProgress
 }) {
   const mode = CRAWL_MODES[crawlMode] || CRAWL_MODES.full_list_full_detail;
@@ -105,6 +106,7 @@ export async function runCrawlPipeline({
   try {
     const { page } = session;
     await page.goto(url, { waitUntil: "networkidle2" });
+    await ensureLoggedInIfNeeded(page, profile, { loginCredentials });
 
     logStep("Navigating to last page before crawl");
     const lastUrl = await jumpToLastPage(page, profile);
@@ -125,7 +127,7 @@ export async function runCrawlPipeline({
       pageIndex += 1;
 
       logStep("Scraping page", `page=${pageIndex}, profile=${profile.name}`);
-      const scraped = await scrapeCurrentPage(page, { profile });
+      const scraped = await scrapeCurrentPage(page, { profile, loginCredentials });
       lastScraped = scraped;
       logInfo("Page loaded", `page=${pageIndex}, title=${scraped.title || "(empty)"}`);
 

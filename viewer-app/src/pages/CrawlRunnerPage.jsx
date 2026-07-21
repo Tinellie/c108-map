@@ -12,6 +12,7 @@ import {
   Paper,
   Select,
   Stack,
+  TextField,
   Typography
 } from "@mui/material";
 import { withApiBaseUrl } from "../utils/apiBase.js";
@@ -83,6 +84,8 @@ export function CrawlRunnerPage() {
   const [options, setOptions] = useState({ crawlModes: FALLBACK_CRAWL_MODES });
 
   const [crawlMode, setCrawlMode] = useState("full_list_new_detail");
+  const [loginUsername, setLoginUsername] = useState("");
+  const [loginPassword, setLoginPassword] = useState("");
 
   const [runningJob, setRunningJob] = useState(null);
   const [history, setHistory] = useState([]);
@@ -178,7 +181,9 @@ export function CrawlRunnerPage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          crawlMode
+          crawlMode,
+          loginUsername: String(loginUsername || "").trim(),
+          loginPassword: String(loginPassword || "")
         })
       });
 
@@ -227,6 +232,34 @@ export function CrawlRunnerPage() {
                 {submitting ? "启动中..." : "开始抓取"}
               </Button>
             </Stack>
+
+            <Paper variant="outlined" sx={{ p: 2 }}>
+              <Stack spacing={1.5}>
+                <Typography variant="h6">Circle.ms 登录</Typography>
+                <Stack direction={{ xs: "column", md: "row" }} spacing={1.5}>
+                  <TextField
+                    size="small"
+                    label="邮箱"
+                    value={loginUsername}
+                    onChange={(event) => setLoginUsername(event.target.value)}
+                    autoComplete="username"
+                    fullWidth
+                  />
+                  <TextField
+                    size="small"
+                    label="密码"
+                    type="password"
+                    value={loginPassword}
+                    onChange={(event) => setLoginPassword(event.target.value)}
+                    autoComplete="current-password"
+                    fullWidth
+                  />
+                </Stack>
+                <Typography variant="body2" color="text.secondary">
+                  命中登录页时会自动填写并继续抓取；如果登录失败，任务会直接终止。
+                </Typography>
+              </Stack>
+            </Paper>
 
             {runningJob ? (
               <Paper variant="outlined" sx={{ p: 2 }}>

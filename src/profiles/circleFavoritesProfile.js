@@ -5,6 +5,12 @@ export const circleFavoritesProfile = {
     enabled: true,
     // If title contains this keyword, treat page as login state.
     loginTitleKeyword: "ログイン",
+    loginFormSelector: "form#loginform",
+    usernameSelector: "#Username",
+    passwordSelector: "#Password",
+    submitSelector: "#loginbtn",
+    invalidCredentialSelector: "span.field-validation-error[data-valmsg-for='Password']",
+    invalidCredentialText: "メールアドレスまたはパスワードが違います",
     // Wait until at least one target row appears after manual login.
     successSelector: "table.md-infotable.t-user-favorites tr.webcatalog-circle-list-detail",
     timeoutMs: 300000

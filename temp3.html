@@ -1,0 +1,72 @@
+<div class="login_h_contents">
+            <div class="login_h_logo">
+                <img src="/assets/images/common/img_top_brand.png" alt="コミケWebカタログ | Comike Web Catalog" title="コミケWebカタログ | Comike Web Catalog" style="width: 427px; height: 162px;">
+            </div>
+
+            <!--ログインフォーム-->
+            <div class="login_form_list">
+                <h2 class="login_form_h">Circle.msのアカウントでログイン</h2>
+                <div class="login_error"><div class="validation-summary-errors"><ul><li style="display:none"></li>
+</ul></div></div>
+                <form method="POST" action="https://auth2.circle.ms/" id="loginform">
+                    <input type="hidden" name="ReturnUrl" value="https://classic-webcatalog.circle.ms/Account/Login">
+                    <input id="state" name="state" type="hidden" value="/Circle/23003928">
+                    <ul>
+                        <li>
+                            メールアドレス<br>
+                            <input data-val="true" data-val-maxlength="255文字以内で入力して下さい" data-val-maxlength-max="255" data-val-minlength="4文字以上で入力して下さい" data-val-minlength-min="4" data-val-required="The メールアドレス field is required." id="Username" name="Username" placeholder="メールアドレスを入力してください" type="text" value="">
+                            <div style="display: block;">
+                                <span class="field-validation-valid" data-valmsg-for="Username" data-valmsg-replace="true"></span>
+                            </div>
+                        </li>
+                        <li>
+                            パスワード<br>
+                            <input class="input-validation-error" data-val="true" data-val-required="The パスワード field is required." id="Password" name="Password" placeholder="パスワードを入力してください" type="password"><br>
+                            <div style="display: block;">
+                                <span class="field-validation-error" data-valmsg-for="Password" data-valmsg-replace="true">メールアドレスまたはパスワードが違います</span>
+                            </div>
+                        </li>
+                    </ul><!--/ログインフォーム-->
+                    <div style="text-align: center; margin-top: 5px;">
+                        <span>※パスワードを忘れた場合は<a href="https://auth2.circle.ms/Account/RecoveryPassword">こちら</a>へ</span>
+                    </div>
+                    <div class="login_btn">
+                        <input class="s-btn--login" type="submit" value="ログイン" id="loginbtn">
+                    </div>
+                    <div class="newmember_btn">
+                        <a class="s-btn--register" href="/Account/RegisterPre?RedirectUrl=https%3A%2F%2Fclassic-webcatalog.circle.ms%2F">新規会員登録</a>
+                    </div>
+                </form>
+                <section class="s-login">
+                        <h2 class="section-head2">SNSアカウントでログイン</h2>
+    <div class="s-login">
+            <div class="s-login_btn">
+                <a href="https://auth2.circle.ms/Account/ExternalLogIn?provider=Twitter&amp;returnUrl=https%3A%2F%2Fclassic-webcatalog.circle.ms%2F" class="twitter">
+                    <img src="/assets/images/login/twitter.png" alt="twitter" title="twitter">
+                </a>
+            </div>
+            <div class="s-login_btn">
+                <a href="https://auth2.circle.ms/Account/ExternalLogIn?provider=pixiv&amp;returnUrl=https%3A%2F%2Fclassic-webcatalog.circle.ms%2F" class="pixiv">
+                    <img src="/assets/images/login/pixiv.png" alt="pixiv" title="pixiv">
+                </a>
+            </div>
+            <div class="s-login_btn">
+                <a href="https://auth2.circle.ms/Account/ExternalLogIn?provider=https://accounts.google.com&amp;returnUrl=https%3A%2F%2Fclassic-webcatalog.circle.ms%2F" class="google">
+                    <img src="/assets/images/login/google.png" alt="google" title="google">
+                </a>
+            </div>
+            <div class="s-login_btn">
+                <a href="https://auth2.circle.ms/Account/ExternalLogIn?provider=Yahoo&amp;returnUrl=https%3A%2F%2Fclassic-webcatalog.circle.ms%2F" class="yahoo">
+                    <img src="/assets/images/login/yahoo.png" alt="yahoo" title="yahoo">
+                </a>
+            </div>
+            <div class="s-login_btn">
+                <a href="https://auth2.circle.ms/Account/ExternalLogIn?provider=LINE&amp;returnUrl=https%3A%2F%2Fclassic-webcatalog.circle.ms%2F" class="line">
+                    <img src="/assets/images/login/line.png" alt="line" title="line">
+                </a>
+            </div>
+    </div>
+
+                </section>
+                </div>
+        </div>
