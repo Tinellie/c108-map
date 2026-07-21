@@ -146,7 +146,12 @@ export async function createScrapeSession({ headlessOverride } = {}) {
   const launchOptions = {
     headless,
     pipe: true,
-    args: []
+    args: [
+      "--no-sandbox",
+      "--disable-setuid-sandbox",
+      "--disable-dev-shm-usage",
+      "--disable-gpu"
+    ]
   };
 
   if (config.puppeteer.executablePath) {
