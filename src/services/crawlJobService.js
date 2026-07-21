@@ -55,6 +55,29 @@ function sanitizeProgress(progress) {
   };
 }
 
+function sanitizeError(error, jobId) {
+  if (!error) {
+    return null;
+  }
+
+  if (typeof error === "string") {
+    return { message: error };
+  }
+
+  const message = String(error.message || "unknown error").trim() || "unknown error";
+  const code = error.code ? String(error.code).trim() : "";
+  const failureScreenshotPath = String(error.failureScreenshotPath || "").replace(/\\/g, "/").trim();
+
+  return {
+    message,
+    code: code || undefined,
+    failureScreenshotPath: failureScreenshotPath || undefined,
+    failureScreenshotUrl: failureScreenshotPath
+      ? `/api/crawl/jobs/${encodeURIComponent(String(jobId || ""))}/failure-screenshot`
+      : undefined
+  };
+}
+
 function toPublicJob(job) {
   if (!job) {
     return null;
@@ -74,7 +97,7 @@ function toPublicJob(job) {
     },
     summary: sanitizeSummary(job.summary),
     progress: sanitizeProgress(job.progress),
-    error: job.error || null
+    error: sanitizeError(job.error, job.jobId)
   };
 }
 
@@ -255,7 +278,11 @@ export function startCrawlJob(input) {
     })
     .catch((error) => {
       job.status = "failed";
-      job.error = error?.message || "unknown error";
+      job.error = {
+        message: error?.message || "unknown error",
+        code: error?.code || "",
+        failureScreenshotPath: error?.failureScreenshotPath || ""
+      };
     })
     .finally(() => {
       const finishedAt = new Date();

@@ -78,6 +78,26 @@ async function readJson(response) {
   return json;
 }
 
+function getJobErrorMessage(errorValue) {
+  if (!errorValue) {
+    return "";
+  }
+
+  if (typeof errorValue === "string") {
+    return errorValue;
+  }
+
+  return String(errorValue.message || "unknown error").trim() || "unknown error";
+}
+
+function getFailureScreenshotUrl(errorValue) {
+  if (!errorValue || typeof errorValue !== "object") {
+    return "";
+  }
+
+  return String(errorValue.failureScreenshotUrl || "").trim();
+}
+
 export function CrawlRunnerPage() {
   const [loadingOptions, setLoadingOptions] = useState(true);
   const [optionsError, setOptionsError] = useState("");
@@ -335,7 +355,23 @@ export function CrawlRunnerPage() {
                         </Typography>
                       </>
                     ) : null}
-                    {job.error ? <Alert severity="error">{job.error}</Alert> : null}
+                    {job.error ? <Alert severity="error">{getJobErrorMessage(job.error)}</Alert> : null}
+                    {getFailureScreenshotUrl(job.error) ? (
+                      <Box
+                        component="img"
+                        src={getFailureScreenshotUrl(job.error)}
+                        alt="抓取失败时截图"
+                        sx={{
+                          mt: 1,
+                          width: "100%",
+                          maxWidth: 920,
+                          borderRadius: 1,
+                          border: "1px solid #e7d8c5",
+                          objectFit: "contain",
+                          backgroundColor: "#faf6ef"
+                        }}
+                      />
+                    ) : null}
                   </Stack>
                 </Paper>
               ))}

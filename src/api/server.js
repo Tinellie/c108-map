@@ -452,6 +452,37 @@ app.get("/api/crawl/jobs/:jobId", (req, res) => {
   res.json({ data: job });
 });
 
+app.get("/api/crawl/jobs/:jobId/failure-screenshot", async (req, res) => {
+  const job = getCrawlJobById(req.params.jobId);
+  if (!job) {
+    return res.status(404).json({ message: "job not found" });
+  }
+
+  const failureScreenshotPath = String(job?.error?.failureScreenshotPath || "").replace(/\\/g, "/").trim();
+  if (!failureScreenshotPath) {
+    return res.status(404).json({ message: "failure screenshot not found" });
+  }
+
+  const allowedPrefix = "storage/crawl_debug/job_failures/";
+  if (!failureScreenshotPath.startsWith(allowedPrefix) || path.extname(failureScreenshotPath).toLowerCase() !== ".png") {
+    return res.status(400).json({ message: "invalid screenshot path" });
+  }
+
+  const absolutePath = path.resolve(projectRoot, failureScreenshotPath);
+  const relativeToRoot = path.relative(projectRoot, absolutePath);
+  if (relativeToRoot.startsWith("..") || path.isAbsolute(relativeToRoot)) {
+    return res.status(400).json({ message: "invalid screenshot path" });
+  }
+
+  try {
+    await fs.access(absolutePath);
+    res.setHeader("Cache-Control", "no-store");
+    return res.sendFile(absolutePath);
+  } catch {
+    return res.status(404).json({ message: "failure screenshot not found" });
+  }
+});
+
 app.get("/api/color-preferences", async (_req, res) => {
   try {
     const items = await getColorPreferences();

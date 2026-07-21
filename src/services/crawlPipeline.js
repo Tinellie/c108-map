@@ -1,3 +1,6 @@
+import fs from "node:fs/promises";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { ensureSchema } from "../db/setup.js";
 import { loadExistingCircleIdSet, upsertCircleDetails, upsertFavoriteCircles } from "../repositories/crawlRepository.js";
 import { loadColorPaletteMap } from "../repositories/colorPaletteRepository.js";
@@ -7,6 +10,11 @@ import { downloadCircleImages } from "./imageDownloadService.js";
 import { scrapeCircleDetail } from "./circleDetailService.js";
 import { config } from "../config/env.js";
 import { logInfo, logStep, logSuccess, logWarn } from "../utils/logger.js";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const projectRoot = path.resolve(__dirname, "..", "..");
+const JOB_FAILURE_SCREENSHOT_DIR = path.join(projectRoot, "storage", "crawl_debug", "job_failures");
 
 const CRAWL_MODES = {
   full_list_full_detail: {
@@ -56,6 +64,32 @@ function toFavoriteCircles(items, colorPaletteMap) {
     .filter((circle) => circle.circle_id && circle.circle_name);
 }
 
+function normalizeRelativePath(filePath) {
+  return path.relative(projectRoot, filePath).split(path.sep).join("/");
+}
+
+async function captureFailureScreenshot(page, { crawlMode } = {}) {
+  if (!page || page.isClosed()) {
+    return null;
+  }
+
+  await fs.mkdir(JOB_FAILURE_SCREENSHOT_DIR, { recursive: true });
+  const safeMode = String(crawlMode || "crawl").replace(/[^a-z0-9_-]+/gi, "_");
+  const fileName = `${Date.now()}-${safeMode}.png`;
+  const absolutePath = path.join(JOB_FAILURE_SCREENSHOT_DIR, fileName);
+
+  await page.screenshot({
+    path: absolutePath,
+    type: "png",
+    fullPage: true
+  });
+
+  return {
+    absolutePath,
+    relativePath: normalizeRelativePath(absolutePath)
+  };
+}
+
 export async function runCrawlPipeline({
   url,
   profile,
@@ -102,9 +136,10 @@ export async function runCrawlPipeline({
   let detailTargets = 0;
   let pageIndex = 0;
   let lastScraped = null;
+  let page = null;
 
   try {
-    const { page } = session;
+    ({ page } = session);
     await page.goto(url, { waitUntil: "networkidle2" });
     await ensureLoggedInIfNeeded(page, profile, { loginCredentials });
 
@@ -277,6 +312,18 @@ export async function runCrawlPipeline({
     } else if (!mode.crawlDetail) {
       logInfo("Detail crawl skipped", `mode=${crawlMode}`);
     }
+  } catch (error) {
+    try {
+      const screenshot = await captureFailureScreenshot(page, { crawlMode });
+      if (screenshot?.relativePath && error && typeof error === "object") {
+        error.failureScreenshotPath = screenshot.relativePath;
+        logWarn("Crawl failed, screenshot captured", screenshot.relativePath);
+      }
+    } catch (screenshotError) {
+      logWarn("Crawl failed, but screenshot capture also failed", screenshotError?.message || "unknown");
+    }
+
+    throw error;
   } finally {
     await session.close();
   }
