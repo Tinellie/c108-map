@@ -226,7 +226,7 @@ export function CirclesTable({
               <TableRow>
                 <TableCell colSpan={7}>
                   <Typography align="center" color="text.secondary" sx={{ py: 6 }}>
-                    No rows matched this filter.
+                    没有匹配结果
                   </Typography>
                 </TableCell>
               </TableRow>
@@ -245,7 +245,7 @@ export function CirclesTable({
         <Box sx={{ p: 1.5, width: 460 }}>
           <Stack spacing={1.5}>
             <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
-              Location Filters
+              位置筛选
             </Typography>
 
             <Box sx={{ display: "flex", alignItems: "center", gap: 1, flexWrap: "wrap" }}>

@@ -39,7 +39,7 @@ export function SearchControls({
           fullWidth
           value={search}
           onChange={(event) => onSearchChange(event.target.value)}
-          placeholder="Search by circle name, booth, author, tag, pixiv id, twitter id..."
+          placeholder="搜索圈名、摊位、作者、标签、Pixiv、X"
           InputProps={{
             startAdornment: (
               <InputAdornment position="start">
@@ -50,33 +50,33 @@ export function SearchControls({
         />
 
         <FormControl sx={{ minWidth: { xs: "100%", md: 220 } }}>
-          <InputLabel id="sort-mode-label">Sort</InputLabel>
-          <Select labelId="sort-mode-label" value={sortMode} label="Sort" onChange={(event) => onSortModeChange(event.target.value)}>
-            <MenuItem value="registration">登记顺 (ID)</MenuItem>
-            <MenuItem value="color">颜色顺 (自定义数组)</MenuItem>
-            <MenuItem value="location">位置顺 (日数/场馆/岛/编号)</MenuItem>
+          <InputLabel id="sort-mode-label">排序</InputLabel>
+          <Select labelId="sort-mode-label" value={sortMode} label="排序" onChange={(event) => onSortModeChange(event.target.value)}>
+            <MenuItem value="registration">登记顺(ID)</MenuItem>
+            <MenuItem value="color">颜色顺</MenuItem>
+            <MenuItem value="location">位置顺</MenuItem>
           </Select>
         </FormControl>
 
         <FormControl sx={{ minWidth: { xs: "100%", md: 180 } }}>
-          <InputLabel id="sort-direction-label">Direction</InputLabel>
+          <InputLabel id="sort-direction-label">方向</InputLabel>
           <Select
             labelId="sort-direction-label"
             value={sortDirection}
-            label="Direction"
+            label="方向"
             onChange={(event) => onSortDirectionChange(event.target.value)}
           >
-            <MenuItem value="asc">顺序</MenuItem>
-            <MenuItem value="desc">逆序</MenuItem>
+            <MenuItem value="asc">升序</MenuItem>
+            <MenuItem value="desc">降序</MenuItem>
           </Select>
         </FormControl>
 
         <Button variant="outlined" onClick={onToggleColorPriorityEditor} sx={{ minWidth: { xs: "100%", md: 180 } }}>
-          Color Priority
+          颜色优先级
         </Button>
 
         <Button variant="text" onClick={onResetFilters} sx={{ minWidth: { xs: "100%", md: 120 } }}>
-          重置筛选
+          重置
         </Button>
       </Stack>
 

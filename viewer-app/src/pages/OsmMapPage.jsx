@@ -21,10 +21,10 @@ const STATION_MARKER_SCALES = {
   yurikamome: 0.24
 };
 const PATH_HIGHLIGHT_OPTIONS = [
-  { id: "e-entry", tagKey: "path:e-entry", label: "東待機列 (e-entry)", color: "#ff2b2b", fillColor: "rgba(255, 115, 115, 0.28)" },
-  { id: "s-entry", tagKey: "path:s-entry", label: "西南待機列 (s-entry)", color: "#1c55ff", fillColor: "rgba(121, 158, 255, 0.28)" },
-  { id: "e-to-s", tagKey: "path:e-to-s", label: "東-南連絡通路 (e-to-s)", color: "#1c55ff", fillColor: "rgba(121, 158, 255, 0.28)" },
-  { id: "s-to-e", tagKey: "path:s-to-e", label: "南-東連絡通路 (s-to-e)", color: "#ff2b2b", fillColor: "rgba(255, 115, 115, 0.28)" }
+  { id: "e-entry", tagKey: "path:e-entry", label: "东侧待机列", color: "#ff2b2b", fillColor: "rgba(255, 115, 115, 0.28)" },
+  { id: "s-entry", tagKey: "path:s-entry", label: "西南待机列", color: "#1c55ff", fillColor: "rgba(121, 158, 255, 0.28)" },
+  { id: "e-to-s", tagKey: "path:e-to-s", label: "东-南连络通道", color: "#1c55ff", fillColor: "rgba(121, 158, 255, 0.28)" },
+  { id: "s-to-e", tagKey: "path:s-to-e", label: "南-东连络通道", color: "#ff2b2b", fillColor: "rgba(255, 115, 115, 0.28)" }
 ];
 const EDITOR_ENTITY_STYLE = {
   hall: { stroke: "rgba(242, 133, 49, 0.9)", fill: "rgba(252, 181, 112, 0.06)" },
@@ -2933,10 +2933,10 @@ export function OsmMapPage({ isUserMode = true, enableEditTools = true }) {
         >
           <Stack spacing={1.25}>
             <FormControl size="small" fullWidth>
-              <InputLabel id="circle-day-select-label">Circle Day</InputLabel>
+              <InputLabel id="circle-day-select-label">日期</InputLabel>
               <Select
                 labelId="circle-day-select-label"
-                label="Circle Day"
+                label="日期"
                 value={selectedCircleDay}
                 onChange={(event) => setSelectedCircleDay(String(event.target.value))}
               >
@@ -2944,7 +2944,7 @@ export function OsmMapPage({ isUserMode = true, enableEditTools = true }) {
                 <MenuItem value="day2">二日目(日)</MenuItem>
               </Select>
             </FormControl>
-            <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>颜色编辑面板</Typography>
+            <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>颜色筛选</Typography>
             <Stack spacing={0.15}>
               {COLOR_INDEX_OPTIONS.map((colorIndex) => {
                 const checked = selectedLabelColorIndexes.includes(colorIndex);
@@ -2963,19 +2963,19 @@ export function OsmMapPage({ isUserMode = true, enableEditTools = true }) {
                 );
               })}
             </Stack>
-            <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>Level</Typography>
+            <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>层级</Typography>
             <Stack spacing={0.25}>
               {[1, 2, 3, 4].map((level) => (
                 <FormControlLabel
                   key={level}
                   control={<Checkbox size="small" checked={selectedLevels.includes(level)} onChange={() => toggleSelectedLevel(level)} disabled={isUserMode && level > 2} />}
-                  label={`Level ${level}`}
+                  label={`L${level}`}
                   sx={{ m: 0, "& .MuiFormControlLabel-label": { fontSize: 13 } }}
                 />
               ))}
             </Stack>
             <Stack spacing={0.5}>
-              <Typography variant="body2" sx={{ fontWeight: 600 }}>Map Rotation</Typography>
+              <Typography variant="body2" sx={{ fontWeight: 600 }}>地图旋转</Typography>
               <Slider
                 value={mapRotationDeg}
                 min={-180}
@@ -3004,7 +3004,7 @@ export function OsmMapPage({ isUserMode = true, enableEditTools = true }) {
           }}
         >
           <Stack spacing={1.25}>
-            <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>Path Highlight</Typography>
+            <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>路径高亮</Typography>
             <Stack spacing={0.25}>
               {PATH_HIGHLIGHT_OPTIONS.map((option) => (
                 <FormControlLabel
@@ -3048,12 +3048,12 @@ export function OsmMapPage({ isUserMode = true, enableEditTools = true }) {
             }}
           >
             <Stack spacing={1.25}>
-              <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>Map Editor Overlay</Typography>
+              <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>编辑叠加</Typography>
             <FormControl size="small" fullWidth disabled={!editorPages.length}>
-              <InputLabel id="editor-page-select-label">Page</InputLabel>
+              <InputLabel id="editor-page-select-label">页面</InputLabel>
               <Select
                 labelId="editor-page-select-label"
-                label="Page"
+                label="页面"
                 value={selectedEditorPage?.page || selectedEditorPageNumber}
                 onChange={(event) => selectEditorPage(event.target.value)}
               >
@@ -3092,24 +3092,24 @@ export function OsmMapPage({ isUserMode = true, enableEditTools = true }) {
               inputProps={{ step: 0.001, min: 0.005 }}
             />
             <FormControl size="small" fullWidth disabled={!selectedEditorPage}>
-              <InputLabel id="island-label-side-select-label">Label Side</InputLabel>
+              <InputLabel id="island-label-side-select-label">标签位置</InputLabel>
               <Select
                 labelId="island-label-side-select-label"
-                label="Label Side"
+                label="标签位置"
                 value={selectedEditorPageIslandLabelSetting.side}
                 onChange={(event) => updateSelectedPageIslandLabelSetting("side", event.target.value)}
               >
-                <MenuItem value="top">Top</MenuItem>
-                <MenuItem value="right">Right</MenuItem>
-                <MenuItem value="bottom">Bottom</MenuItem>
-                <MenuItem value="left">Left</MenuItem>
-                <MenuItem value="center">Center</MenuItem>
+                <MenuItem value="top">上</MenuItem>
+                <MenuItem value="right">右</MenuItem>
+                <MenuItem value="bottom">下</MenuItem>
+                <MenuItem value="left">左</MenuItem>
+                <MenuItem value="center">中</MenuItem>
               </Select>
             </FormControl>
             <Stack direction="row" spacing={0.75}>
               <TextField
                 size="small"
-                label="Label X(px)"
+                label="标签X"
                 type="number"
                 value={selectedEditorPageIslandLabelSetting.offsetX}
                 disabled={!selectedEditorPage}
@@ -3118,7 +3118,7 @@ export function OsmMapPage({ isUserMode = true, enableEditTools = true }) {
               />
               <TextField
                 size="small"
-                label="Label Y(px)"
+                label="标签Y"
                 type="number"
                 value={selectedEditorPageIslandLabelSetting.offsetY}
                 disabled={!selectedEditorPage}
@@ -3127,10 +3127,10 @@ export function OsmMapPage({ isUserMode = true, enableEditTools = true }) {
               />
             </Stack>
             <FormControl size="small" fullWidth disabled={!editorEntityOptions.length}>
-              <InputLabel id="editor-entity-select-label">Object</InputLabel>
+              <InputLabel id="editor-entity-select-label">对象</InputLabel>
               <Select
                 labelId="editor-entity-select-label"
-                label="Object"
+                label="对象"
                 value={selectedEditorEntity?.id || ""}
                 onChange={(event) => setSelectedEditorEntityId(String(event.target.value))}
               >
@@ -3142,7 +3142,7 @@ export function OsmMapPage({ isUserMode = true, enableEditTools = true }) {
             <Stack direction="row" spacing={0.75}>
               <TextField
                 size="small"
-                label="Obj X"
+                label="X"
                 type="number"
                 value={selectedEditorEntity?.x ?? ""}
                 disabled={!selectedEditorEntity}
@@ -3151,7 +3151,7 @@ export function OsmMapPage({ isUserMode = true, enableEditTools = true }) {
               />
               <TextField
                 size="small"
-                label="Obj Y"
+                label="Y"
                 type="number"
                 value={selectedEditorEntity?.y ?? ""}
                 disabled={!selectedEditorEntity}
@@ -3171,7 +3171,7 @@ export function OsmMapPage({ isUserMode = true, enableEditTools = true }) {
               />
               <TextField
                 size="small"
-                label="Obj Scale"
+                label="缩放"
                 type="number"
                 value={selectedEditorEntity?.scale ?? ""}
                 disabled={!selectedEditorEntity}
@@ -3180,41 +3180,41 @@ export function OsmMapPage({ isUserMode = true, enableEditTools = true }) {
               />
             </Stack>
             <Stack direction="row" spacing={0.75}>
-              <Button size="small" variant="outlined" disabled={!selectedEditorEntity} onClick={() => rotateSelectedEditorEntity(-5)}>Rotate -</Button>
-              <Button size="small" variant="outlined" disabled={!selectedEditorEntity} onClick={() => rotateSelectedEditorEntity(5)}>Rotate +</Button>
+              <Button size="small" variant="outlined" disabled={!selectedEditorEntity} onClick={() => rotateSelectedEditorEntity(-5)}>左转</Button>
+              <Button size="small" variant="outlined" disabled={!selectedEditorEntity} onClick={() => rotateSelectedEditorEntity(5)}>右转</Button>
             </Stack>
             <Stack spacing={0.25}>
               <FormControlLabel
                 control={<Checkbox size="small" checked={showEditorOverlay} disabled={!editorPages.length} onChange={(event) => setShowEditorOverlay(event.target.checked)} />}
-                label="Show overlay"
+                label="显示叠加"
                 sx={{ m: 0, "& .MuiFormControlLabel-label": { fontSize: 13 } }}
               />
               <FormControlLabel
                 control={<Checkbox size="small" checked={showEditorLabels} disabled={!editorPages.length} onChange={(event) => setShowEditorLabels(event.target.checked)} />}
-                label="Show labels"
+                label="显示标签"
                 sx={{ m: 0, "& .MuiFormControlLabel-label": { fontSize: 13 } }}
               />
               <FormControlLabel
                 control={<Checkbox size="small" checked={isEditorOverlayMoveMode} disabled={!editorPages.length || !showEditorOverlay} onChange={(event) => setIsEditorOverlayMoveMode(event.target.checked)} />}
-                label="Drag to move"
+                label="拖拽移动"
                 sx={{ m: 0, "& .MuiFormControlLabel-label": { fontSize: 13 } }}
               />
             </Stack>
             <Stack spacing={0.5} alignItems="center">
-              <Button size="small" variant="outlined" disabled={!editorPages.length} onClick={() => nudgeEditorOverlay(0, -EDITOR_OVERLAY_NUDGE)}>Up</Button>
+              <Button size="small" variant="outlined" disabled={!editorPages.length} onClick={() => nudgeEditorOverlay(0, -EDITOR_OVERLAY_NUDGE)}>上</Button>
               <Stack direction="row" spacing={0.5}>
-                <Button size="small" variant="outlined" disabled={!editorPages.length} onClick={() => nudgeEditorOverlay(-EDITOR_OVERLAY_NUDGE, 0)}>Left</Button>
-                <Button size="small" variant="outlined" disabled={!editorPages.length} onClick={() => nudgeEditorOverlay(EDITOR_OVERLAY_NUDGE, 0)}>Right</Button>
+                <Button size="small" variant="outlined" disabled={!editorPages.length} onClick={() => nudgeEditorOverlay(-EDITOR_OVERLAY_NUDGE, 0)}>左</Button>
+                <Button size="small" variant="outlined" disabled={!editorPages.length} onClick={() => nudgeEditorOverlay(EDITOR_OVERLAY_NUDGE, 0)}>右</Button>
               </Stack>
-              <Button size="small" variant="outlined" disabled={!editorPages.length} onClick={() => nudgeEditorOverlay(0, EDITOR_OVERLAY_NUDGE)}>Down</Button>
+              <Button size="small" variant="outlined" disabled={!editorPages.length} onClick={() => nudgeEditorOverlay(0, EDITOR_OVERLAY_NUDGE)}>下</Button>
             </Stack>
             <Stack direction="row" spacing={0.75}>
-              <Button size="small" variant="outlined" disabled={!editorPages.length} onClick={() => scaleEditorOverlay(0.9)}>Scale -</Button>
-              <Button size="small" variant="outlined" disabled={!editorPages.length} onClick={() => scaleEditorOverlay(1.1)}>Scale +</Button>
+              <Button size="small" variant="outlined" disabled={!editorPages.length} onClick={() => scaleEditorOverlay(0.9)}>缩小</Button>
+              <Button size="small" variant="outlined" disabled={!editorPages.length} onClick={() => scaleEditorOverlay(1.1)}>放大</Button>
             </Stack>
             <Stack direction="row" spacing={0.75}>
-              <Button size="small" variant="contained" disabled={!editorPages.length} onClick={saveEditorTransforms}>Save</Button>
-              <Button size="small" variant="text" disabled={!editorPages.length} onClick={() => setEditorOverlay(EDITOR_OVERLAY_DEFAULT)}>Reset overlay</Button>
+              <Button size="small" variant="contained" disabled={!editorPages.length} onClick={saveEditorTransforms}>保存</Button>
+              <Button size="small" variant="text" disabled={!editorPages.length} onClick={() => setEditorOverlay(EDITOR_OVERLAY_DEFAULT)}>重置叠加</Button>
             </Stack>
             </Stack>
           </Paper>
@@ -3252,7 +3252,7 @@ export function OsmMapPage({ isUserMode = true, enableEditTools = true }) {
                 textTransform: "none"
               }}
             >
-              Hall Hide
+              隐藏馆标签
             </Button>
             <Collapse in={isHallLabelPanelOpen} timeout="auto" unmountOnExit={false} collapsedSize={0}>
               <Stack spacing={0.75} sx={{ p: 1.25, maxHeight: "calc(100vh - 180px)", overflowY: "auto" }}>

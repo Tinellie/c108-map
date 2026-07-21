@@ -48,10 +48,10 @@ const ISLAND_SEQUENCE_DIRECTIONS = [
   { value: "bottom-to-top", label: "下→上", symbol: "↑" }
 ];
 const ISLAND_NUMBERING_CORNERS = [
-  { value: "top-left", label: "↖ Top-Left" },
-  { value: "top-right", label: "↗ Top-Right" },
-  { value: "bottom-left", label: "↙ Bottom-Left" },
-  { value: "bottom-right", label: "↘ Bottom-Right" }
+  { value: "top-left", label: "↖ 左上" },
+  { value: "top-right", label: "↗ 右上" },
+  { value: "bottom-left", label: "↙ 左下" },
+  { value: "bottom-right", label: "↘ 右下" }
 ];
 const PAGE_ISLAND_RAW_SEQUENCES = [
   { label: "Katakana", start: "ア", values: HIRAGANA_SEQUENCE.map(hiraganaToKatakana) },
@@ -1304,7 +1304,7 @@ export function MapEditorPage() {
       setImportSourcePageNumber(nextPages.length ? String(nextPages[0].page) : "");
       setSelectedIds([]);
     } catch (loadError) {
-      setError(loadError.message || "Failed to load extracted map data");
+      setError(loadError.message || "加载地图数据失败");
       setSummary(null);
       setPages([]);
       setSelectedPageNumber("");
@@ -1330,9 +1330,9 @@ export function MapEditorPage() {
       });
       const json = await readJson(response);
       setLoadedSnapshotId(String(json.data?.saveId || ""));
-      setSnapshotMessage(`Saved snapshot ${json.data?.saveId || ""}`.trim());
+      setSnapshotMessage(`已保存快照 ${json.data?.saveId || ""}`.trim());
     } catch (requestError) {
-      setSnapshotError(requestError.message || "Failed to save snapshot");
+      setSnapshotError(requestError.message || "保存快照失败");
     } finally {
       setIsSavingSnapshot(false);
     }
@@ -1353,9 +1353,9 @@ export function MapEditorPage() {
       });
       const json = await readJson(response);
       setLoadedSnapshotId(String(json.data?.saveId || ""));
-      setSnapshotMessage(`Transferred latest save to ${json.data?.transfer?.targetPath || "storage/map"}`.trim());
+      setSnapshotMessage(`已转存到 ${json.data?.transfer?.targetPath || "storage/map"}`.trim());
     } catch (requestError) {
-      setSnapshotError(requestError.message || "Failed to transfer snapshot");
+      setSnapshotError(requestError.message || "转存失败");
     } finally {
       setIsTransferringSnapshot(false);
     }
@@ -1383,9 +1383,9 @@ export function MapEditorPage() {
         totalBooths: Number(snapshot?.totalBooths || nextPages.reduce((sum, page) => sum + page.entities.booths.length, 0))
       }));
       setLoadedSnapshotId(String(snapshot?.saveId || ""));
-      setSnapshotMessage(`Loaded snapshot ${snapshot?.saveId || ""}`.trim());
+      setSnapshotMessage(`已加载快照 ${snapshot?.saveId || ""}`.trim());
     } catch (requestError) {
-      setSnapshotError(requestError.message || "Failed to load latest snapshot");
+      setSnapshotError(requestError.message || "加载最新快照失败");
     } finally {
       setIsLoadingSnapshot(false);
     }
@@ -1394,7 +1394,7 @@ export function MapEditorPage() {
   async function loadPreviousSnapshot() {
     if (!loadedSnapshotId) {
       setSnapshotMessage("");
-      setSnapshotError("Load a saved snapshot before rolling back.");
+      setSnapshotError("请先加载一个已保存快照");
       return;
     }
     setIsLoadingSnapshot(true);
@@ -1418,9 +1418,9 @@ export function MapEditorPage() {
         totalBooths: Number(snapshot?.totalBooths || nextPages.reduce((sum, page) => sum + page.entities.booths.length, 0))
       }));
       setLoadedSnapshotId(String(snapshot?.saveId || ""));
-      setSnapshotMessage(`Rolled back to snapshot ${snapshot?.saveId || ""}`.trim());
+      setSnapshotMessage(`已回退到快照 ${snapshot?.saveId || ""}`.trim());
     } catch (requestError) {
-      setSnapshotError(requestError.message || "Failed to load previous snapshot");
+      setSnapshotError(requestError.message || "加载上一版快照失败");
     } finally {
       setIsLoadingSnapshot(false);
     }
@@ -1431,12 +1431,12 @@ export function MapEditorPage() {
     setSnapshotError("");
     const violations = validateMapEditorPages(pages);
     if (!violations.length) {
-      setSnapshotMessage("Validation passed: island raw codes and booth a/b numbers are continuous.");
+      setSnapshotMessage("检查通过");
       return;
     }
     const visibleViolations = violations.slice(0, 30);
-    const suffix = violations.length > visibleViolations.length ? `\n...and ${violations.length - visibleViolations.length} more.` : "";
-    setSnapshotError(`Validation failed (${violations.length} issue${violations.length === 1 ? "" : "s"}):\n${visibleViolations.join("\n")}${suffix}`);
+    const suffix = violations.length > visibleViolations.length ? `\n...还有 ${violations.length - visibleViolations.length} 条` : "";
+    setSnapshotError(`检查失败（${violations.length} 条）：\n${visibleViolations.join("\n")}${suffix}`);
   }
 
   useEffect(() => {
@@ -2975,7 +2975,7 @@ export function MapEditorPage() {
     return (
       <>
         <Divider flexItem />
-        <Typography variant="body2" sx={{ fontWeight: 600 }}>Code Assigning</Typography>
+        <Typography variant="body2" sx={{ fontWeight: 600 }}>编号方向</Typography>
         <Box sx={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 0.5 }}>
           {ISLAND_SEQUENCE_DIRECTIONS.map((option) => (
             <Button
@@ -2992,34 +2992,34 @@ export function MapEditorPage() {
             </Button>
           ))}
         </Box>
-        <TextField size="small" label="Start symbol" value={islandSequenceStart} onChange={(event) => setIslandSequenceStart(event.target.value)} />
-        <Button variant="contained" color="secondary" onClick={applyIslandSequenceLabels} disabled={selectedIslands.length < 2}>Confirm numbering</Button>
+        <TextField size="small" label="起始符号" value={islandSequenceStart} onChange={(event) => setIslandSequenceStart(event.target.value)} />
+        <Button variant="contained" color="secondary" onClick={applyIslandSequenceLabels} disabled={selectedIslands.length < 2}>应用符号</Button>
         <Divider flexItem />
-        <Typography variant="body2" sx={{ fontWeight: 600 }}>Numbering</Typography>
+        <Typography variant="body2" sx={{ fontWeight: 600 }}>展位编号</Typography>
         <FormControl size="small">
-          <InputLabel id="island-numbering-corner-label">Start corner</InputLabel>
-          <Select labelId="island-numbering-corner-label" label="Start corner" value={islandNumberingCorner} onChange={(event) => setIslandNumberingCorner(String(event.target.value || "top-left"))}>
+          <InputLabel id="island-numbering-corner-label">起始角</InputLabel>
+          <Select labelId="island-numbering-corner-label" label="起始角" value={islandNumberingCorner} onChange={(event) => setIslandNumberingCorner(String(event.target.value || "top-left"))}>
             {ISLAND_NUMBERING_CORNERS.map((option) => <MenuItem key={option.value} value={option.value}>{option.label}</MenuItem>)}
           </Select>
         </FormControl>
-        <TextField size="small" type="number" label="Start number" value={islandNumberingStart} onChange={(event) => setIslandNumberingStart(event.target.value)} inputProps={{ min: 1, step: 1 }} />
+        <TextField size="small" type="number" label="起始编号" value={islandNumberingStart} onChange={(event) => setIslandNumberingStart(event.target.value)} inputProps={{ min: 1, step: 1 }} />
         <FormControlLabel
           sx={{ my: -0.5 }}
           control={<Checkbox size="small" checked={islandNumberingPairMode} onChange={(event) => setIslandNumberingPairMode(event.target.checked)} />}
-          label={<Typography variant="caption">Same number per 2 booths</Typography>}
+          label={<Typography variant="caption">每2格同号</Typography>}
         />
-        <Button variant="contained" color="secondary" onClick={applyIslandBoothNumbering} disabled={!selectedIslands.length}>Apply booth numbering</Button>
-        <Button variant="outlined" color="secondary" onClick={splitBoothsInSelectedIslands} disabled={!canSplitBoothsInSelectedIslands}>Split booths a/b</Button>
+        <Button variant="contained" color="secondary" onClick={applyIslandBoothNumbering} disabled={!selectedIslands.length}>应用编号</Button>
+        <Button variant="outlined" color="secondary" onClick={splitBoothsInSelectedIslands} disabled={!canSplitBoothsInSelectedIslands}>拆分 a/b</Button>
       </>
     );
   }
 
   function renderInspector() {
     if (!selectedPage || !graph) {
-      return <Alert severity="info">No page selected.</Alert>;
+      return <Alert severity="info">未选择页面</Alert>;
     }
     if (!selectedEntities.length) {
-      return <Alert severity="info">Click a map entity to inspect it.</Alert>;
+      return <Alert severity="info">点击图形查看详情</Alert>;
     }
     if (selectedEntities.length > 1) {
       return (
@@ -3039,11 +3039,11 @@ export function MapEditorPage() {
         {renderSingleTransformFields(entity)}
         {entity.type === "booth" ? (
           <>
-            <TextField size="small" label="Booth Number" value={entity.boothNumber || ""} onChange={(event) => updateEntityField(entity.id, "boothNumber", event.target.value)} />
+            <TextField size="small" label="展位号" value={entity.boothNumber || ""} onChange={(event) => updateEntityField(entity.id, "boothNumber", event.target.value)} />
             <FormControl size="small">
-              <InputLabel id="booth-suffix-label">Suffix</InputLabel>
-              <Select labelId="booth-suffix-label" label="Suffix" value={entity.boothSuffix || ""} onChange={(event) => updateEntityField(entity.id, "boothSuffix", event.target.value)}>
-                {ALLOWED_BOOTH_SUFFIXES.map((suffix) => <MenuItem key={suffix || "none"} value={suffix}>{suffix || "None"}</MenuItem>)}
+              <InputLabel id="booth-suffix-label">后缀</InputLabel>
+              <Select labelId="booth-suffix-label" label="后缀" value={entity.boothSuffix || ""} onChange={(event) => updateEntityField(entity.id, "boothSuffix", event.target.value)}>
+                {ALLOWED_BOOTH_SUFFIXES.map((suffix) => <MenuItem key={suffix || "none"} value={suffix}>{suffix || "无"}</MenuItem>)}
               </Select>
             </FormControl>
             <Stack direction="row" spacing={1}>
@@ -3052,23 +3052,23 @@ export function MapEditorPage() {
             </Stack>
           </>
         ) : null}
-        {entity.type === "group" ? <TextField size="small" label="Group ID" value={entity.id} InputProps={{ readOnly: true }} /> : null}
+        {entity.type === "group" ? <TextField size="small" label="组ID" value={entity.id} InputProps={{ readOnly: true }} /> : null}
         {entity.type === "island" ? (
           <>
-            <TextField size="small" label="Island Raw" value={entity.raw || ""} onChange={(event) => updateEntityField(entity.id, "raw", event.target.value)} />
+            <TextField size="small" label="岛标识" value={entity.raw || ""} onChange={(event) => updateEntityField(entity.id, "raw", event.target.value)} />
             {renderIslandPanels()}
           </>
         ) : null}
         {entity.type === "hall" ? (
           <>
-            <TextField size="small" label="Hall ID" value={entity.id} InputProps={{ readOnly: true }} />
-            <TextField size="small" label="Rotation" type="number" value={entity.rotation || 0} onChange={(event) => updateEntityField(entity.id, "rotation", event.target.value)} />
-            <TextField size="small" label="Scale" type="number" value={entity.scale || 1} onChange={(event) => updateEntityField(entity.id, "scale", event.target.value)} inputProps={{ step: 0.01 }} />
-            <TextField size="small" label="Trim" type="number" value={entity.trim || 0} onChange={(event) => updateEntityField(entity.id, "trim", event.target.value)} />
-            <TextField size="small" label="Background Image" value={entity.backgroundImagePath || ""} onChange={(event) => updateEntityField(entity.id, "backgroundImagePath", event.target.value)} />
+            <TextField size="small" label="馆ID" value={entity.id} InputProps={{ readOnly: true }} />
+            <TextField size="small" label="旋转" type="number" value={entity.rotation || 0} onChange={(event) => updateEntityField(entity.id, "rotation", event.target.value)} />
+            <TextField size="small" label="缩放" type="number" value={entity.scale || 1} onChange={(event) => updateEntityField(entity.id, "scale", event.target.value)} inputProps={{ step: 0.01 }} />
+            <TextField size="small" label="裁切" type="number" value={entity.trim || 0} onChange={(event) => updateEntityField(entity.id, "trim", event.target.value)} />
+            <TextField size="small" label="背景图" value={entity.backgroundImagePath || ""} onChange={(event) => updateEntityField(entity.id, "backgroundImagePath", event.target.value)} />
             <Stack direction="row" spacing={1}>
-              <TextField size="small" label="Background X" type="number" value={entity.backgroundOffsetX || 0} onChange={(event) => updateEntityField(entity.id, "backgroundOffsetX", event.target.value)} />
-              <TextField size="small" label="Background Y" type="number" value={entity.backgroundOffsetY || 0} onChange={(event) => updateEntityField(entity.id, "backgroundOffsetY", event.target.value)} />
+              <TextField size="small" label="背景X" type="number" value={entity.backgroundOffsetX || 0} onChange={(event) => updateEntityField(entity.id, "backgroundOffsetX", event.target.value)} />
+              <TextField size="small" label="背景Y" type="number" value={entity.backgroundOffsetY || 0} onChange={(event) => updateEntityField(entity.id, "backgroundOffsetY", event.target.value)} />
             </Stack>
           </>
         ) : null}
@@ -3111,7 +3111,7 @@ export function MapEditorPage() {
     <Box sx={{ minHeight: "100vh", pb: 6 }}>
       <Container maxWidth="xl" sx={{ pt: 1.5 }}>
         <Stack spacing={1.5}>
-          {loading ? <Alert severity="info">Loading extracted map data...</Alert> : null}
+          {loading ? <Alert severity="info">加载地图数据中...</Alert> : null}
           {error ? <Alert severity="error">{error}</Alert> : null}
           {snapshotMessage ? <Alert severity="success">{snapshotMessage}</Alert> : null}
           {snapshotError ? <Alert severity="error">{snapshotError}</Alert> : null}
@@ -3120,29 +3120,29 @@ export function MapEditorPage() {
             <Stack spacing={0.75}>
               <Stack direction={{ xs: "column", md: "row" }} spacing={0.75} sx={toolbarRowSx}>
                 <MapExtractionActions onRefresh={loadExtraction} />
-                <Button variant="contained" color="secondary" size="small" onClick={validateLoadedMap} disabled={!pages.length || loading}>Validate</Button>
-                <Button variant="outlined" size="small" onClick={saveSnapshot} disabled={!pages.length || isSavingSnapshot || loading}>{isSavingSnapshot ? "Saving..." : "Save"}</Button>
-                <Button variant="outlined" size="small" onClick={loadLatestSnapshot} disabled={isLoadingSnapshot || loading}>{isLoadingSnapshot ? "Loading..." : "Load"}</Button>
-                <Button variant="outlined" size="small" color="warning" onClick={loadPreviousSnapshot} disabled={!loadedSnapshotId || isLoadingSnapshot || loading}>{isLoadingSnapshot ? "Loading..." : "Rollback"}</Button>
+                <Button variant="contained" color="secondary" size="small" onClick={validateLoadedMap} disabled={!pages.length || loading}>检查</Button>
+                <Button variant="outlined" size="small" onClick={saveSnapshot} disabled={!pages.length || isSavingSnapshot || loading}>{isSavingSnapshot ? "保存中..." : "保存"}</Button>
+                <Button variant="outlined" size="small" onClick={loadLatestSnapshot} disabled={isLoadingSnapshot || loading}>{isLoadingSnapshot ? "加载中..." : "加载"}</Button>
+                <Button variant="outlined" size="small" color="warning" onClick={loadPreviousSnapshot} disabled={!loadedSnapshotId || isLoadingSnapshot || loading}>{isLoadingSnapshot ? "加载中..." : "回退"}</Button>
                 <Button variant="text" size="small" onClick={resetView}>100%</Button>
-                <FormControlLabel control={<Checkbox checked={showMapLabels} onChange={(event) => setShowMapLabels(event.target.checked)} size="small" />} label="Show labels" />
+                <FormControlLabel control={<Checkbox checked={showMapLabels} onChange={(event) => setShowMapLabels(event.target.checked)} size="small" />} label="显示标签" />
                 <Box sx={{ flex: 1, display: { xs: "none", md: "block" } }} />
-                <Button variant="contained" size="small" onClick={transferSnapshot} disabled={!pages.length || isSavingSnapshot || isTransferringSnapshot || loading}>{isTransferringSnapshot ? "Transferring..." : "Transfer"}</Button>
+                <Button variant="contained" size="small" onClick={transferSnapshot} disabled={!pages.length || isSavingSnapshot || isTransferringSnapshot || loading}>{isTransferringSnapshot ? "Transferring..." : "转存"}</Button>
               </Stack>
               <Divider />
               <Stack direction={{ xs: "column", md: "row" }} spacing={0.75} sx={toolbarRowSx}>
                 <FormControl size="small" sx={toolbarControlSx} disabled={!pages.length}>
-                  <InputLabel id="map-page-select-label">Map Page</InputLabel>
-                  <Select labelId="map-page-select-label" label="Map Page" value={selectedPageNumber} onChange={(event) => { setSelectedPageNumber(String(event.target.value || "")); setSelectedIds([]); }}>
+                  <InputLabel id="map-page-select-label">页面</InputLabel>
+                  <Select labelId="map-page-select-label" label="页面" value={selectedPageNumber} onChange={(event) => { setSelectedPageNumber(String(event.target.value || "")); setSelectedIds([]); }}>
                     {pages.map((page) => <MenuItem key={page.page} value={String(page.page)}>Page {page.page} ({page.entities.booths.length} booths)</MenuItem>)}
                   </Select>
                 </FormControl>
-                <Button variant="outlined" size="small" onClick={createNewPage} disabled={loading}>New Page</Button>
-                <Button variant="outlined" color="error" size="small" onClick={requestDeleteCurrentPage} disabled={!selectedPage || loading}>Delete Page</Button>
+                <Button variant="outlined" size="small" onClick={createNewPage} disabled={loading}>新建页</Button>
+                <Button variant="outlined" color="error" size="small" onClick={requestDeleteCurrentPage} disabled={!selectedPage || loading}>删页</Button>
                 <Box sx={{ flex: 1, display: { xs: "none", md: "block" } }} />
                 <FormControl size="small" sx={toolbarControlSx} disabled={!pages.length}>
-                  <InputLabel id="import-page-select-label">Import Page</InputLabel>
-                  <Select labelId="import-page-select-label" label="Import Page" value={importSourcePageNumber} onChange={(event) => setImportSourcePageNumber(String(event.target.value || ""))}>
+                  <InputLabel id="import-page-select-label">导入页</InputLabel>
+                  <Select labelId="import-page-select-label" label="导入页" value={importSourcePageNumber} onChange={(event) => setImportSourcePageNumber(String(event.target.value || ""))}>
                     {pages.map((page) => <MenuItem key={`import-${page.page}`} value={String(page.page)}>Page {page.page} ({page.entities.booths.length} booths)</MenuItem>)}
                   </Select>
                 </FormControl>
@@ -3152,13 +3152,13 @@ export function MapEditorPage() {
                 {selectedPage ? <Chip size="small" variant="outlined" label={`Groups ${selectedPage.entities.groups.length}`} /> : null}
                 {selectedPage ? <Chip size="small" variant="outlined" label={`Islands ${selectedPage.entities.islands.length}`} /> : null}
                 {selectedPage ? <Chip size="small" variant="outlined" label={`Halls ${selectedPage.entities.halls.length}`} /> : null}
-                {summary ? <Typography variant="body2" color="text.secondary">Total pages {summary.pageCount} | Total booths {summary.totalBooths}</Typography> : null}
+                {summary ? <Typography variant="body2" color="text.secondary">页数 {summary.pageCount} | 展位 {summary.totalBooths}</Typography> : null}
               </Stack>
               <Divider />
               <Stack direction={{ xs: "column", md: "row" }} spacing={1} alignItems={{ xs: "stretch", md: "center" }}>
-                <Button variant="contained" color="secondary" onClick={fixMap} disabled={!selectedPage || loading}>Fix Map</Button>
+                <Button variant="contained" color="secondary" onClick={fixMap} disabled={!selectedPage || loading}>修复地图</Button>
                 <TextField
-                  label="Booth width"
+                  label="展位宽"
                   size="small"
                   type="number"
                   value={fixMapBoothSizeWidth}
@@ -3168,7 +3168,7 @@ export function MapEditorPage() {
                   sx={{ width: { xs: "100%", md: 120 } }}
                 />
                 <TextField
-                  label="Booth height"
+                  label="展位高"
                   size="small"
                   type="number"
                   value={fixMapBoothSizeHeight}
@@ -3178,7 +3178,7 @@ export function MapEditorPage() {
                   sx={{ width: { xs: "100%", md: 120 } }}
                 />
                 <TextField
-                  label="Booth size offset"
+                  label="展位偏移"
                   size="small"
                   type="number"
                   value={fixMapBoothSizeOffset}
@@ -3187,10 +3187,10 @@ export function MapEditorPage() {
                   slotProps={{ htmlInput: { step: 0.1 } }}
                   sx={{ width: { xs: "100%", md: 150 } }}
                 />
-                <Button variant="outlined" color="secondary" onClick={buildIslands} disabled={!selectedPage?.entities.groups.length || loading}>Build Islands</Button>
-                <Button variant="contained" color="secondary" onClick={mergeSelectedGroups} disabled={!canMergeSelectedGroups || loading}>Merge Groups</Button>
-                <Button variant="contained" color="secondary" onClick={mergeSelectedIslands} disabled={!canMergeSelectedIslands || loading}>Merge Islands</Button>
-                <Button variant="outlined" color="secondary" onClick={createHallFromSelectedIslands} disabled={!canCreateHallFromSelectedIslands || loading}>Create Hall</Button>
+                <Button variant="outlined" color="secondary" onClick={buildIslands} disabled={!selectedPage?.entities.groups.length || loading}>生成岛</Button>
+                <Button variant="contained" color="secondary" onClick={mergeSelectedGroups} disabled={!canMergeSelectedGroups || loading}>合并组</Button>
+                <Button variant="contained" color="secondary" onClick={mergeSelectedIslands} disabled={!canMergeSelectedIslands || loading}>合并岛</Button>
+                <Button variant="outlined" color="secondary" onClick={createHallFromSelectedIslands} disabled={!canCreateHallFromSelectedIslands || loading}>生成馆</Button>
               </Stack>
             </Stack>
           </Paper>
@@ -3207,20 +3207,20 @@ export function MapEditorPage() {
                     </Box>
                   </Box>
                 </Box>
-              ) : <Alert severity="info">No extracted page selected.</Alert>}
+              ) : <Alert severity="info">未选择页面</Alert>}
             </Paper>
 
             <Box sx={{ width: { xs: "100%", lg: 320 }, flexShrink: 0 }}>
               <Paper elevation={0} sx={{ p: 1, border: "1px solid #eadbc7", borderRadius: 2, height: "100%", overflow: "auto", ...inspectorSx }}>
                 <Stack spacing={0.75}>
-                  <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>Selection</Typography>
+                  <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>选择</Typography>
                   {renderInspector()}
                   {selectedPage ? (
                     <>
-                      <Typography variant="h6" sx={{ mt: 0.5 }}>Page Summary</Typography>
-                      <Typography variant="body2">Detected booth rectangles: {selectedPage.boothRectangleCount}</Typography>
-                      <Typography variant="body2">Recognized booths: {selectedPage.entities.booths.length}</Typography>
-                      <Button variant="text" component="a" href={toImageUrl(selectedPage.debugImagePath)} target="_blank" rel="noreferrer">Open Debug Overlay</Button>
+                      <Typography variant="h6" sx={{ mt: 0.5 }}>页面摘要</Typography>
+                      <Typography variant="body2">识别框：{selectedPage.boothRectangleCount}</Typography>
+                      <Typography variant="body2">识别展位：{selectedPage.entities.booths.length}</Typography>
+                      <Button variant="text" component="a" href={toImageUrl(selectedPage.debugImagePath)} target="_blank" rel="noreferrer">调试图</Button>
                     </>
                   ) : null}
                 </Stack>
@@ -3230,15 +3230,15 @@ export function MapEditorPage() {
         </Stack>
       </Container>
       <Dialog open={isDeletePageDialogOpen} onClose={closeDeletePageDialog}>
-        <DialogTitle>Delete current page?</DialogTitle>
+        <DialogTitle>删除当前页？</DialogTitle>
         <DialogContent>
           <DialogContentText>
-            Delete Page {selectedPage?.page || ""}? This only updates the editor state until you save or transfer.
+            确认删除第 {selectedPage?.page || ""} 页？删除后需保存或转存才会生效。
           </DialogContentText>
         </DialogContent>
         <DialogActions>
-          <Button onClick={closeDeletePageDialog}>Cancel</Button>
-          <Button color="error" variant="contained" onClick={deleteCurrentPage}>Delete</Button>
+          <Button onClick={closeDeletePageDialog}>取消</Button>
+          <Button color="error" variant="contained" onClick={deleteCurrentPage}>删除</Button>
         </DialogActions>
       </Dialog>
     </Box>

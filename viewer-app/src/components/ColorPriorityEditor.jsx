@@ -39,17 +39,17 @@ export function ColorPriorityEditor({
     >
       <Stack direction={{ xs: "column", md: "row" }} spacing={1} justifyContent="space-between" sx={{ mb: 1.5 }}>
         <Typography sx={{ fontSize: 13, color: "text.secondary" }}>
-          Drag rows to adjust priority and edit aliases. Top item sorts first in color mode.
+          拖拽调整顺序，可直接改别名。
         </Typography>
         <Stack direction="row" spacing={1}>
           {saveStatusText ? (
             <Typography sx={{ fontSize: 12, color: "text.secondary", alignSelf: "center" }}>{saveStatusText}</Typography>
           ) : null}
           <Button size="small" variant="outlined" onClick={onReset}>
-            Reset Default
+            恢复默认
           </Button>
           <Button size="small" variant="contained" onClick={onSave} disabled={saving}>
-            {saving ? "Saving..." : "Save"}
+            {saving ? "保存中..." : "保存"}
           </Button>
         </Stack>
       </Stack>
@@ -106,7 +106,7 @@ export function ColorPriorityEditor({
             <Typography sx={{ width: 96, fontSize: 13, color: "text.secondary" }}>{COLOR_LABELS[colorIndex] || colorIndex}</Typography>
             <TextField
               size="small"
-              label="Alias"
+              label="别名"
               value={String(colorAliases?.[colorIndex] || "")}
               onChange={(event) => onAliasChange(colorIndex, event.target.value)}
               sx={{ minWidth: 180, flexGrow: 1 }}

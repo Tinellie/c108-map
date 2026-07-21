@@ -11,18 +11,18 @@ export function ViewerHero({ stats, usingMock }) {
     >
       <Container maxWidth="xl" sx={{ pt: 5, pb: 4 }}>
         <Typography variant="h3" sx={{ fontWeight: 700, letterSpacing: -0.8 }}>
-          Circle Favorites Viewer
+          社团收藏
         </Typography>
         <Typography sx={{ mt: 1, color: "#6f6457" }}>
-          Browse crawled circle data with quick search, social IDs, and detail previews.
+          快速筛选、查看社交账号和详情。
         </Typography>
 
         <Stack direction={{ xs: "column", md: "row" }} spacing={1.2} sx={{ mt: 2.5 }}>
-          <Chip label={`Total ${stats.total}`} color="primary" variant="outlined" />
+          <Chip label={`总数 ${stats.total}`} color="primary" variant="outlined" />
           <Chip label={`Pixiv ${stats.withPixiv}`} color="secondary" variant="outlined" />
-          <Chip label={`Twitter ${stats.withTwitter}`} color="info" variant="outlined" />
-          <Chip label={`Tagged ${stats.withTags}`} color="success" variant="outlined" />
-          {usingMock ? <Chip label="Mock Mode" color="warning" variant="filled" /> : null}
+          <Chip label={`X ${stats.withTwitter}`} color="info" variant="outlined" />
+          <Chip label={`有标签 ${stats.withTags}`} color="success" variant="outlined" />
+          {usingMock ? <Chip label="示例数据" color="warning" variant="filled" /> : null}
         </Stack>
       </Container>
     </Box>

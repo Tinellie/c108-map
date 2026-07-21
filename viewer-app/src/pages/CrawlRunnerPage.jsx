@@ -22,23 +22,23 @@ const CRAWL_JOBS_API = withApiBaseUrl("/api/crawl/jobs");
 const FALLBACK_CRAWL_MODES = [
   {
     value: "full_list_new_detail",
-    label: "Full list + new detail only",
-    description: "Scrape all list pages but only crawl detail pages for circles not existing in DB before this run"
+    label: "全量列表 + 新增详情",
+    description: "抓取全部列表，仅抓取新增社团的详情"
   },
   {
     value: "full_list_full_detail",
-    label: "Full list + full detail",
-    description: "Scrape all list pages and all detail pages; upsert existing circles and insert new ones"
+    label: "全量列表 + 全量详情",
+    description: "抓取全部列表和全部详情，覆盖更新"
   },
   {
     value: "new_list_new_detail",
-    label: "New list + new detail only",
-    description: "Write only circles not existing in DB before this run, then crawl detail pages only for those new circles"
+    label: "新增列表 + 新增详情",
+    description: "只写入新增社团，并抓取其详情"
   },
   {
     value: "list_only",
-    label: "List only",
-    description: "Scrape all list pages and upsert list fields only; skip all detail-page crawling"
+    label: "仅列表",
+    description: "只抓取列表，不抓取详情"
   }
 ];
 
@@ -118,7 +118,7 @@ export function CrawlRunnerPage() {
         setCrawlMode(FALLBACK_CRAWL_MODES[0].value);
       }
     } catch (error) {
-      setOptionsError(error.message || "Failed to load crawl options");
+      setOptionsError(error.message || "加载抓取选项失败");
       setOptions((current) => current || { crawlModes: FALLBACK_CRAWL_MODES });
       if (!crawlMode) {
         setCrawlMode(FALLBACK_CRAWL_MODES[0].value);
@@ -141,7 +141,7 @@ export function CrawlRunnerPage() {
       setRunningJob(currentJson.data || null);
       setHistory(Array.isArray(historyJson.data) ? historyJson.data : []);
     } catch (error) {
-      setActionError(error.message || "Failed to refresh job status");
+      setActionError(error.message || "刷新任务状态失败");
     }
   }
 
@@ -184,10 +184,10 @@ export function CrawlRunnerPage() {
 
       const json = await readJson(response);
       setRunningJob(json.data || null);
-      setActionMessage("Crawl job started. Status will refresh automatically.");
+      setActionMessage("任务已启动");
       await refreshJobs();
     } catch (error) {
-      setActionError(error.message || "Failed to start crawl job");
+      setActionError(error.message || "启动任务失败");
     } finally {
       setSubmitting(false);
     }
@@ -199,23 +199,20 @@ export function CrawlRunnerPage() {
         <Paper elevation={0} sx={{ p: 3, border: "1px solid #eadbc7", borderRadius: 3 }}>
           <Stack spacing={2}>
             <Typography variant="h4" sx={{ fontWeight: 700 }}>
-              Crawl Control Center
-            </Typography>
-            <Typography color="text.secondary">
-              Use this page to trigger backend crawler jobs and monitor progress.
+              社团抓取
             </Typography>
 
-            {loadingOptions ? <Alert severity="info">Loading crawl options...</Alert> : null}
+            {loadingOptions ? <Alert severity="info">加载选项中...</Alert> : null}
             {optionsError ? <Alert severity="error">{optionsError}</Alert> : null}
             {actionError ? <Alert severity="error">{actionError}</Alert> : null}
             {actionMessage ? <Alert severity="success">{actionMessage}</Alert> : null}
 
             <Stack direction={{ xs: "column", md: "row" }} spacing={2}>
               <FormControl size="small" sx={{ minWidth: 320 }} disabled={loadingOptions}>
-                <InputLabel id="crawl-mode-select-label">Crawl Mode</InputLabel>
+                <InputLabel id="crawl-mode-select-label">抓取模式</InputLabel>
                 <Select
                   labelId="crawl-mode-select-label"
-                  label="Crawl Mode"
+                  label="抓取模式"
                   value={crawlMode}
                   onChange={(event) => setCrawlMode(String(event.target.value || ""))}
                 >
@@ -227,38 +224,38 @@ export function CrawlRunnerPage() {
                 </Select>
               </FormControl>
               <Button variant="contained" onClick={startJob} disabled={!canSubmit}>
-                {submitting ? "Starting..." : "Start Crawl"}
+                {submitting ? "启动中..." : "开始抓取"}
               </Button>
             </Stack>
 
             {runningJob ? (
               <Paper variant="outlined" sx={{ p: 2 }}>
                 <Stack spacing={1}>
-                  <Typography variant="h6">Current Job</Typography>
+                  <Typography variant="h6">当前任务</Typography>
                   <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap">
                     <Chip label={runningJob.status} color={statusColor(runningJob.status)} size="small" />
                     <Typography variant="body2" color="text.secondary">
-                      ID: {runningJob.jobId}
+                      ID：{runningJob.jobId}
                     </Typography>
                     <Typography variant="body2" color="text.secondary">
-                      Mode: {runningJob.request?.crawlMode}
+                      模式：{runningJob.request?.crawlMode}
                     </Typography>
                   </Stack>
-                  <Typography variant="body2">URL: {runningJob.request?.url}</Typography>
+                  <Typography variant="body2">URL：{runningJob.request?.url}</Typography>
                   <Typography variant="body2" color="text.secondary">
-                    Started: {runningJob.startedAt}
+                    开始时间：{runningJob.startedAt}
                   </Typography>
                   {runningJob.progress ? (
                     <Stack spacing={1} sx={{ pt: 1 }}>
                       <Typography variant="body2" color="text.secondary">
-                        原项目数: {runningJob.progress.originalCount}
-                        {runningJob.progress.newCount > 0 ? `，新项目数: ${runningJob.progress.newCount}` : ""}
+                        原有: {runningJob.progress.originalCount}
+                        {runningJob.progress.newCount > 0 ? `，新增: ${runningJob.progress.newCount}` : ""}
                       </Typography>
                       {runningJob.progress.stage === "detail" ? (
                         <Stack spacing={0.75}>
                           <LinearProgress variant="determinate" value={getDetailProgressValue(runningJob.progress)} />
                           <Typography variant="body2" color="text.secondary">
-                            detail 读取中: {runningJob.progress.detailDone}/{runningJob.progress.detailTotal}
+                            详情抓取：{runningJob.progress.detailDone}/{runningJob.progress.detailTotal}
                             {runningJob.progress.detailFailed ? `，失败 ${runningJob.progress.detailFailed}` : ""}
                           </Typography>
                         </Stack>
@@ -273,35 +270,35 @@ export function CrawlRunnerPage() {
                 </Stack>
               </Paper>
             ) : (
-              <Alert severity="info">No running crawl job.</Alert>
+              <Alert severity="info">当前没有运行任务</Alert>
             )}
 
-            <Typography variant="h6">Recent Jobs</Typography>
+            <Typography variant="h6">最近记录</Typography>
             <Stack spacing={1}>
-              {history.length === 0 ? <Alert severity="info">No recent jobs.</Alert> : null}
+              {history.length === 0 ? <Alert severity="info">暂无记录</Alert> : null}
               {history.map((job) => (
                 <Paper key={job.jobId} variant="outlined" sx={{ p: 2 }}>
                   <Stack spacing={0.5}>
                     <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap">
                       <Chip label={job.status} color={statusColor(job.status)} size="small" />
                       <Typography variant="body2" color="text.secondary">
-                        ID: {job.jobId}
+                        ID：{job.jobId}
                       </Typography>
                       <Typography variant="body2" color="text.secondary">
-                        Duration: {job.durationMs || 0} ms
+                        耗时：{job.durationMs || 0} ms
                       </Typography>
                     </Stack>
                     <Typography variant="body2">{job.request?.url}</Typography>
                     <Typography variant="body2" color="text.secondary">
-                      Mode: {job.request?.crawlMode}
+                      模式：{job.request?.crawlMode}
                     </Typography>
                     {job.summary ? (
                       <>
                         <Typography variant="body2" color="text.secondary">
-                          Pages: {job.summary.pagesProcessed}, Circles: {job.summary.totalCircles}, New circles: {job.summary.totalNewCircles}, Written: {job.summary.totalCirclesWritten}, Detail targets: {job.summary.detailTargets}, Downloaded images: {job.summary.imagesDownloaded}
+                          页数：{job.summary.pagesProcessed}，社团：{job.summary.totalCircles}，新增：{job.summary.totalNewCircles}，写入：{job.summary.totalCirclesWritten}
                         </Typography>
                         <Typography variant="body2" color="text.secondary">
-                          Changed items: {job.summary.changedCircles}, New items: {job.summary.newCirclesInserted}
+                          变更：{job.summary.changedCircles}，新增写入：{job.summary.newCirclesInserted}，详情目标：{job.summary.detailTargets}，下载图片：{job.summary.imagesDownloaded}
                         </Typography>
                       </>
                     ) : null}
@@ -311,12 +308,9 @@ export function CrawlRunnerPage() {
               ))}
             </Stack>
 
-            <Typography variant="h6">Current Crawl Options</Typography>
+            <Typography variant="h6">模式</Typography>
             <Paper variant="outlined" sx={{ p: 2 }}>
               <Stack spacing={1}>
-                <Typography variant="body2" color="text.secondary">
-                  Crawl mode:
-                </Typography>
                 {crawlModeOptions.map((mode) => (
                   <Typography key={mode.value} variant="body2">
                     {mode.label}: {mode.description}

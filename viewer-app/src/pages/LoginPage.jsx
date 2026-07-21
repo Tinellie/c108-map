@@ -41,7 +41,7 @@ export function LoginPage({ onLoginSuccess }) {
         onLoginSuccess();
       }
     } catch (loginError) {
-      setError(loginError.message || "Login failed");
+      setError(loginError.message || "登录失败");
     } finally {
       setSubmitting(false);
     }
@@ -52,16 +52,13 @@ export function LoginPage({ onLoginSuccess }) {
       <Paper elevation={0} sx={{ width: "100%", maxWidth: 420, p: 3, border: "1px solid #eadbc7", borderRadius: 3 }}>
         <Stack component="form" spacing={2} onSubmit={submitLogin}>
           <Typography variant="h5" sx={{ fontWeight: 700 }}>
-            Sign In
-          </Typography>
-          <Typography color="text.secondary">
-            Please sign in to continue.
+            登录
           </Typography>
 
           {error ? <Alert severity="error">{error}</Alert> : null}
 
           <TextField
-            label="Username"
+            label="用户名"
             size="small"
             value={username}
             onChange={(event) => setUsername(event.target.value)}
@@ -69,7 +66,7 @@ export function LoginPage({ onLoginSuccess }) {
             required
           />
           <TextField
-            label="Password"
+            label="密码"
             type="password"
             size="small"
             value={password}
@@ -79,7 +76,7 @@ export function LoginPage({ onLoginSuccess }) {
           />
 
           <Button type="submit" variant="contained" disabled={submitting}>
-            {submitting ? "Signing in..." : "Sign In"}
+            {submitting ? "登录中..." : "登录"}
           </Button>
         </Stack>
       </Paper>

@@ -17,18 +17,18 @@ const AUTH_ME_API = withApiBaseUrl("/api/auth/me");
 const AUTH_LOGOUT_API = withApiBaseUrl("/api/auth/logout");
 
 const NAV_ITEMS = [
-  { path: "/viewer", label: "Viewer", isActive: (pathname) => pathname === "/viewer" || pathname === "/", userMode: true },
-  { path: "/crawler", label: "Update Circle", isActive: (pathname) => pathname.startsWith("/crawler"), userMode: false },
-  { path: "/osm-map", label: "OSM Map", isActive: (pathname) => pathname === "/osm-map", userMode: true },
-  { path: "/map-editor", label: "Processing Booth", isActive: (pathname) => pathname.startsWith("/map-editor"), userMode: false },
-  { path: "/edit-map", label: "Edit Map", isActive: (pathname) => pathname.startsWith("/edit-map"), userMode: false }
+  { path: "/viewer", label: "社团", isActive: (pathname) => pathname === "/viewer" || pathname === "/", userMode: true },
+  { path: "/crawler", label: "更新社团", isActive: (pathname) => pathname.startsWith("/crawler"), userMode: false },
+  { path: "/osm-map", label: "OSM地图", isActive: (pathname) => pathname === "/osm-map", userMode: true },
+  { path: "/map-editor", label: "展位处理", isActive: (pathname) => pathname.startsWith("/map-editor"), userMode: false },
+  { path: "/edit-map", label: "地图编辑", isActive: (pathname) => pathname.startsWith("/edit-map"), userMode: false }
 ];
 
 function PageFallback() {
   return (
     <Stack alignItems="center" justifyContent="center" spacing={1} sx={{ minHeight: "60vh" }} role="status">
       <CircularProgress size={28} />
-      <Typography color="text.secondary">Loading...</Typography>
+      <Typography color="text.secondary">加载中...</Typography>
     </Stack>
   );
 }
@@ -125,10 +125,10 @@ export default function App() {
             <Box sx={{ flex: 1 }} />
             <FormControlLabel
               control={<Switch size="small" checked={isUserMode} onChange={(event) => setIsUserMode(event.target.checked)} />}
-              label="用户模式"
+              label="浏览模式"
               sx={{ m: 0, ml: "auto", flexShrink: 0, whiteSpace: "nowrap" }}
             />
-            <Button size="small" color="inherit" onClick={handleLogout}>Logout</Button>
+            <Button size="small" color="inherit" onClick={handleLogout}>退出</Button>
           </Stack>
         </Toolbar>
       </AppBar>

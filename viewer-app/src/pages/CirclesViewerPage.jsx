@@ -82,9 +82,9 @@ export function CirclesViewerPage() {
       const normalized = colorPreferenceItemsToState(updatedItems);
       setColorSortOrder(normalized.order);
       setColorAliases(normalized.aliases);
-      setColorPreferenceStatusText("Saved");
+      setColorPreferenceStatusText("已保存");
     } catch (saveError) {
-      setColorPreferenceStatusText(`Save failed: ${saveError.message || "unknown error"}`);
+      setColorPreferenceStatusText(`保存失败：${saveError.message || "未知错误"}`);
     } finally {
       setSavingColorPreferences(false);
     }
@@ -122,7 +122,7 @@ export function CirclesViewerPage() {
         if (!ignore) {
           setRows(mockCircles.map(normalizeCircle));
           setUsingMock(true);
-          setError("API unavailable. Showing mock data.");
+          setError("接口不可用，已切换到示例数据。");
           setColorSortOrder(DEFAULT_COLOR_SORT_ORDER);
           setColorAliases(normalizeColorAliases(DEFAULT_COLOR_ALIASES));
         }
@@ -215,7 +215,7 @@ export function CirclesViewerPage() {
           {loading ? (
             <Stack alignItems="center" justifyContent="center" sx={{ py: 14 }} spacing={1}>
               <CircularProgress size={30} />
-              <Typography color="text.secondary">Loading circles...</Typography>
+              <Typography color="text.secondary">加载社团中...</Typography>
             </Stack>
           ) : (
             <CirclesTable

@@ -30,13 +30,13 @@ export function MapExtractionActions({ onRefresh }) {
       setRebuildState("success");
     } catch (requestError) {
       setRebuildState("idle");
-      setError(requestError.message || "Failed to regenerate extraction");
+      setError(requestError.message || "重建失败");
     } finally {
       setRunning(false);
     }
   }
 
-  const buttonLabel = running ? "Rebuilding..." : rebuildState === "success" ? "Rebuilt" : "Rebuild";
+  const buttonLabel = running ? "重建中..." : rebuildState === "success" ? "已重建" : "重建";
   const buttonColor = rebuildState === "success" ? "success" : "primary";
 
   return (

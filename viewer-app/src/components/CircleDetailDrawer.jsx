@@ -21,24 +21,24 @@ export function CircleDetailDrawer({ selected, open, onClose, imageBaseUrl }) {
 
             <Divider sx={{ my: 2 }} />
 
-            <Typography sx={{ fontSize: 13, color: "text.secondary" }}>Author</Typography>
+            <Typography sx={{ fontSize: 13, color: "text.secondary" }}>作者</Typography>
             <Typography sx={{ mb: 1.2 }}>{selected.author_name || "-"}</Typography>
 
-            <Typography sx={{ fontSize: 13, color: "text.secondary" }}>Genre</Typography>
+            <Typography sx={{ fontSize: 13, color: "text.secondary" }}>分类</Typography>
             <Typography sx={{ mb: 1.2 }}>{selected.genre || "-"}</Typography>
 
-            <Typography sx={{ fontSize: 13, color: "text.secondary" }}>Tag</Typography>
+            <Typography sx={{ fontSize: 13, color: "text.secondary" }}>标签</Typography>
             <Typography sx={{ mb: 1.2 }}>{selected.tags_text || "-"}</Typography>
 
-            <Typography sx={{ fontSize: 13, color: "text.secondary" }}>Memo</Typography>
+            <Typography sx={{ fontSize: 13, color: "text.secondary" }}>备注</Typography>
             <Typography sx={{ mb: 1.2 }}>{selected.memo || "-"}</Typography>
 
-            <Typography sx={{ fontSize: 13, color: "text.secondary" }}>Supplement</Typography>
+            <Typography sx={{ fontSize: 13, color: "text.secondary" }}>补充</Typography>
             <Typography sx={{ whiteSpace: "pre-wrap" }}>{selected.supplement_text || "-"}</Typography>
 
             <Divider sx={{ my: 2 }} />
 
-            <Typography sx={{ fontSize: 13, color: "text.secondary", mb: 1 }}>Image Preview</Typography>
+            <Typography sx={{ fontSize: 13, color: "text.secondary", mb: 1 }}>图片预览</Typography>
             <Stack spacing={1}>
               {(selected.local_image_paths || []).slice(0, 5).map((imagePath) => (
                 <Box
@@ -49,7 +49,7 @@ export function CircleDetailDrawer({ selected, open, onClose, imageBaseUrl }) {
                   sx={{ width: "100%", borderRadius: 1.5, border: "1px solid #e8e1d8" }}
                 />
               ))}
-              {selected.local_image_paths?.length ? null : <Typography color="text.secondary">No image paths.</Typography>}
+              {selected.local_image_paths?.length ? null : <Typography color="text.secondary">暂无图片</Typography>}
             </Stack>
           </>
         ) : null}
