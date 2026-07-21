@@ -203,11 +203,11 @@ export function getTwitterProfileUrl(twitterId) {
 }
 
 export function getCircleDetailUrl(circleId) {
-  return circleId ? `https://webcatalog.circle.ms/Circle/${circleId}` : "";
+  return circleId ? `https://classic-webcatalog.circle.ms/Circle/${circleId}` : "";
 }
 
 export function getCircleMapUrl(circleId) {
-  return circleId ? `https://webcatalog.circle.ms/Circle/Map/${circleId}/0` : "";
+  return circleId ? `https://classic-webcatalog.circle.ms/Circle/Map/${circleId}/0` : "";
 }
 
 export function statsFromRows(rows) {

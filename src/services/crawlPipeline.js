@@ -56,8 +56,15 @@ function toFavoriteCircles(items, colorPaletteMap) {
     .filter((circle) => circle.circle_id && circle.circle_name);
 }
 
-export async function runCrawlPipeline({ url, profile, headlessOverride, crawlMode = "full_list_full_detail" }) {
+export async function runCrawlPipeline({
+  url,
+  profile,
+  headlessOverride,
+  crawlMode = "full_list_full_detail",
+  onProgress
+}) {
   const mode = CRAWL_MODES[crawlMode] || CRAWL_MODES.full_list_full_detail;
+  const emitProgress = typeof onProgress === "function" ? onProgress : () => {};
 
   logStep("Ensuring database schema");
   await ensureSchema();
@@ -67,6 +74,17 @@ export async function runCrawlPipeline({ url, profile, headlessOverride, crawlMo
   const existingCircleIds = await loadExistingCircleIdSet();
   const existingCircleIdsAtStart = new Set(existingCircleIds);
   logSuccess("Existing circle ids loaded", `count=${existingCircleIds.size}`);
+  emitProgress({
+    stage: "list",
+    originalCount: existingCircleIdsAtStart.size,
+    newCount: 0,
+    totalCount: 0,
+    pagesProcessed: 0,
+    detailDone: 0,
+    detailTotal: 0,
+    detailFailed: 0,
+    message: `Original items: ${existingCircleIdsAtStart.size}`
+  });
 
   logStep("Loading color palette mapping");
   const colorPaletteMap = await loadColorPaletteMap();
@@ -145,6 +163,18 @@ export async function runCrawlPipeline({ url, profile, headlessOverride, crawlMo
       }
       detailTargets = allCircles.size;
 
+      emitProgress({
+        stage: "list",
+        originalCount: existingCircleIdsAtStart.size,
+        newCount: newCircleIdsSeen.size,
+        totalCount: allCircles.size,
+        pagesProcessed: pageIndex,
+        detailDone: 0,
+        detailTotal: 0,
+        detailFailed: 0,
+        message: `Original items: ${existingCircleIdsAtStart.size}, new items: ${newCircleIdsSeen.size}`
+      });
+
       const imageStats = await downloadCircleImages(circlesForListWrite, {
         pageUrl: scraped.url,
         cookies: scraped.cookies || [],
@@ -186,6 +216,20 @@ export async function runCrawlPipeline({ url, profile, headlessOverride, crawlMo
     if (mode.crawlDetail && allCircles.size > 0) {
       logStep("Crawling circle detail pages", `count=${allCircles.size}`);
       const detailResults = [];
+      let detailDone = 0;
+      let detailFailed = 0;
+
+      emitProgress({
+        stage: "detail",
+        originalCount: existingCircleIdsAtStart.size,
+        newCount: newCircleIdsSeen.size,
+        totalCount: allCircles.size,
+        pagesProcessed: pageSummaries.length,
+        detailDone,
+        detailTotal: allCircles.size,
+        detailFailed,
+        message: `Detail crawl started: 0/${allCircles.size}`
+      });
 
       for (const circle of allCircles.values()) {
         try {
@@ -195,13 +239,39 @@ export async function runCrawlPipeline({ url, profile, headlessOverride, crawlMo
           });
           detailResults.push(detail);
         } catch (error) {
+          detailFailed += 1;
           logWarn("Circle detail crawl failed", `circle_id=${circle.circle_id}, reason=${error?.message || "unknown"}`);
+        } finally {
+          detailDone += 1;
+          emitProgress({
+            stage: "detail",
+            originalCount: existingCircleIdsAtStart.size,
+            newCount: newCircleIdsSeen.size,
+            totalCount: allCircles.size,
+            pagesProcessed: pageSummaries.length,
+            detailDone,
+            detailTotal: allCircles.size,
+            detailFailed,
+            currentCircleId: circle.circle_id,
+            message: `Detail crawl: ${detailDone}/${allCircles.size}`
+          });
         }
       }
 
       logStep("Writing detail fields to database", `rows=${detailResults.length}`);
       await upsertCircleDetails(detailResults);
       logSuccess("Detail write complete", `rows=${detailResults.length}`);
+      emitProgress({
+        stage: "detail",
+        originalCount: existingCircleIdsAtStart.size,
+        newCount: newCircleIdsSeen.size,
+        totalCount: allCircles.size,
+        pagesProcessed: pageSummaries.length,
+        detailDone,
+        detailTotal: allCircles.size,
+        detailFailed,
+        message: `Detail write complete: ${detailResults.length}`
+      });
     } else if (!mode.crawlDetail) {
       logInfo("Detail crawl skipped", `mode=${crawlMode}`);
     }

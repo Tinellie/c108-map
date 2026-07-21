@@ -398,17 +398,19 @@ function readSavedEditorOverlayTransforms() {
   try {
     const saved = JSON.parse(window.localStorage.getItem(EDITOR_OVERLAY_STORAGE_KEY) || "null");
     if (!saved || typeof saved !== "object") {
-      return { pageOverlays: {}, pageEntities: {}, pageIslandLabelSettings: {}, boothLabelOffsets: {}, uiPreferences: normalizeUiPreferences(null) };
+      return { pageOverlays: {}, pageHalls: {}, pageIslandLabelSettings: {}, boothLabelOffsets: {}, uiPreferences: normalizeUiPreferences(null) };
     }
     return {
       pageOverlays: saved.pageOverlays && typeof saved.pageOverlays === "object" ? saved.pageOverlays : {},
+      pageHalls: saved.pageHalls && typeof saved.pageHalls === "object" ? saved.pageHalls : {},
+      // Keep a temporary legacy field for migration from old overlay payloads.
       pageEntities: saved.pageEntities && typeof saved.pageEntities === "object" ? saved.pageEntities : {},
       pageIslandLabelSettings: saved.pageIslandLabelSettings && typeof saved.pageIslandLabelSettings === "object" ? saved.pageIslandLabelSettings : {},
       boothLabelOffsets: normalizeBoothLabelOffsets(saved.boothLabelOffsets),
       uiPreferences: normalizeUiPreferences(saved.uiPreferences)
     };
   } catch {
-    return { pageOverlays: {}, pageEntities: {}, pageIslandLabelSettings: {}, boothLabelOffsets: {}, uiPreferences: normalizeUiPreferences(null) };
+    return { pageOverlays: {}, pageHalls: {}, pageIslandLabelSettings: {}, boothLabelOffsets: {}, uiPreferences: normalizeUiPreferences(null) };
   }
 }
 
@@ -418,10 +420,12 @@ async function readSavedEditorOverlayTransformsFromApi() {
     const json = await readJson(response);
     const payload = json?.data;
     if (!payload || typeof payload !== "object") {
-      return { pageOverlays: {}, pageEntities: {}, pageIslandLabelSettings: {}, boothLabelOffsets: {}, uiPreferences: normalizeUiPreferences(null) };
+      return { pageOverlays: {}, pageHalls: {}, pageIslandLabelSettings: {}, boothLabelOffsets: {}, uiPreferences: normalizeUiPreferences(null) };
     }
     return {
       pageOverlays: payload.pageOverlays && typeof payload.pageOverlays === "object" ? payload.pageOverlays : {},
+      pageHalls: payload.pageHalls && typeof payload.pageHalls === "object" ? payload.pageHalls : {},
+      // Keep a temporary legacy field for migration from old overlay payloads.
       pageEntities: payload.pageEntities && typeof payload.pageEntities === "object" ? payload.pageEntities : {},
       pageIslandLabelSettings: payload.pageIslandLabelSettings && typeof payload.pageIslandLabelSettings === "object" ? payload.pageIslandLabelSettings : {},
       boothLabelOffsets: normalizeBoothLabelOffsets(payload.boothLabelOffsets),
@@ -443,9 +447,10 @@ async function saveEditorOverlayTransformsToApi(payload) {
 
 function applySavedEditorTransforms(pages, savedTransforms) {
   return pages.map((page) => {
-    const savedEntities = savedTransforms.pageEntities?.[String(page.page)] || {};
-    const applyEntityTransforms = (list) => list.map((entity) => {
-      const savedEntity = savedEntities[entity.id];
+    const savedHalls = savedTransforms.pageHalls?.[String(page.page)] || {};
+    const legacySavedEntities = savedTransforms.pageEntities?.[String(page.page)] || {};
+    const applyHallTransforms = (list) => list.map((entity) => {
+      const savedEntity = savedHalls[entity.id] || legacySavedEntities[entity.id];
       if (!savedEntity) {
         return entity;
       }
@@ -460,10 +465,10 @@ function applySavedEditorTransforms(pages, savedTransforms) {
     return {
       ...page,
       entities: {
-        booths: applyEntityTransforms(page.entities.booths || []),
-        groups: applyEntityTransforms(page.entities.groups || []),
-        islands: applyEntityTransforms(page.entities.islands || []),
-        halls: applyEntityTransforms(page.entities.halls || [])
+        booths: page.entities.booths || [],
+        groups: page.entities.groups || [],
+        islands: page.entities.islands || [],
+        halls: applyHallTransforms(page.entities.halls || [])
       }
     };
   });
@@ -473,21 +478,21 @@ function buildEditorTransformPayload(pages, pageOverlays, pageIslandLabelSetting
   return {
     savedAt: new Date().toISOString(),
     pageOverlays: Object.fromEntries(Object.entries(pageOverlays || {}).map(([pageNumber, transform]) => [pageNumber, normalizeEditorOverlayTransform(transform)])),
+    pageHalls: Object.fromEntries((pages || []).map((page) => [
+      String(page.page),
+      Object.fromEntries((page.entities?.halls || []).map((hall) => [hall.id, {
+        x: roundCoordinate(hall.x),
+        y: roundCoordinate(hall.y),
+        rotation: roundCoordinate(hall.rotation),
+        scale: Math.max(0.005, roundCoordinate(hall.scale))
+      }]))
+    ])),
     pageIslandLabelSettings: Object.fromEntries(Object.entries(pageIslandLabelSettings || {}).map(([pageNumber, setting]) => [
       pageNumber,
       normalizeIslandLabelSetting(setting)
     ])),
     boothLabelOffsets: normalizeBoothLabelOffsets(boothLabelOffsets),
-    uiPreferences: normalizeUiPreferences(uiPreferences),
-    pageEntities: Object.fromEntries((pages || []).map((page) => [
-      String(page.page),
-      Object.fromEntries(flattenEditorEntities(page.entities).map((entity) => [entity.id, {
-        x: roundCoordinate(entity.x),
-        y: roundCoordinate(entity.y),
-        rotation: roundCoordinate(entity.rotation),
-        scale: Math.max(0.005, roundCoordinate(entity.scale))
-      }]))
-    ]))
+    uiPreferences: normalizeUiPreferences(uiPreferences)
   };
 }
 
@@ -1176,6 +1181,30 @@ function getFitViewState(bounds, width, height) {
   };
 }
 
+function getPointBounds(points) {
+  if (!Array.isArray(points) || !points.length) {
+    return { x: 0, y: 0, w: 0, h: 0 };
+  }
+  let minX = Number.POSITIVE_INFINITY;
+  let maxX = Number.NEGATIVE_INFINITY;
+  let minY = Number.POSITIVE_INFINITY;
+  let maxY = Number.NEGATIVE_INFINITY;
+  points.forEach((point) => {
+    minX = Math.min(minX, point.x);
+    maxX = Math.max(maxX, point.x);
+    minY = Math.min(minY, point.y);
+    maxY = Math.max(maxY, point.y);
+  });
+  return { x: minX, y: minY, w: Math.max(0, maxX - minX), h: Math.max(0, maxY - minY) };
+}
+
+function rectsOverlap(left, right, padding = 0) {
+  return left.x <= right.x + right.w + padding
+    && left.x + left.w >= right.x - padding
+    && left.y <= right.y + right.h + padding
+    && left.y + left.h >= right.y - padding;
+}
+
 function drawOnewayArrows(context, way, direction, color, tags) {
   if (!direction) {
     return;
@@ -1260,12 +1289,6 @@ function drawEditorOverlayEntities(context, page, graph, overlay, {
     return `${islandCode}|${boothNumberText}|${suffix}`;
   };
 
-  const toBoothCodeText = (boothEntity) => {
-    const boothNumberText = String(boothEntity?.boothNumber || "").trim();
-    const suffix = normalizeBoothSuffix(boothEntity?.boothSuffix);
-    return `${boothNumberText}${suffix ? suffix.toUpperCase() : ""}`;
-  };
-
   const getBoothLabelInfo = (boothEntity) => {
     const fullKey = getBoothFullKey(boothEntity);
     if (!fullKey) {
@@ -1281,17 +1304,15 @@ function drawEditorOverlayEntities(context, page, graph, overlay, {
     }
     return {
       circleName: String(info.circleName || "").trim() || "-",
-      authorName: String(info.authorName || "-").trim() || "-",
-      boothCodeText: toBoothCodeText(boothEntity)
+      authorName: String(info.authorName || "-").trim() || "-"
     };
   };
 
-  const queueBoothColorLabel = (boothEntity, rect, boothCodeOverride = "") => {
+  const queueBoothColorLabel = (boothEntity, rect) => {
     const info = getBoothLabelInfo(boothEntity);
     if (!info || !rect) {
       return;
     }
-    const boothCodeText = String(boothCodeOverride || info.boothCodeText || "").trim();
     const circleName = String(info.circleName || "-").trim() || "-";
     const text = `${circleName}(${info.authorName})`;
     const fullKey = getBoothFullKey(boothEntity);
@@ -1387,7 +1408,9 @@ function drawEditorOverlayEntities(context, page, graph, overlay, {
     }
   };
 
-  (page.entities.halls || []).forEach((entity) => drawEntity(entity, 12));
+  if (!userMode) {
+    (page.entities.halls || []).forEach((entity) => drawEntity(entity, 12));
+  }
   (page.entities.islands || []).forEach((entity) => drawEntity(entity, 8));
   (page.entities.groups || []).forEach((entity) => drawEntity(entity, 4));
   const booths = page.entities.booths || [];
@@ -1621,9 +1644,16 @@ function drawEditorOverlayEntities(context, page, graph, overlay, {
   drawBoothSideLabels();
 }
 
-export function OsmMapPage({ isUserMode = true, onUserModeChange }) {
+export function OsmMapPage({ isUserMode = true, enableEditTools = true }) {
   const canvasRef = useRef(null);
   const frameRef = useRef(0);
+  const viewUpdateFrameRef = useRef(0);
+  const pendingViewUpdateRef = useRef(null);
+  const viewStateRef = useRef({ zoom: 1, offsetX: 0, offsetY: 0 });
+  const hoverHitFrameRef = useRef(0);
+  const pendingHoverCanvasPointRef = useRef(null);
+  const boothLabelOffsetFrameRef = useRef(0);
+  const pendingBoothLabelOffsetsRef = useRef({});
   const dragStateRef = useRef({ type: "none", pointerId: null, lastX: 0, lastY: 0 });
   const renderedBoothLabelsRef = useRef([]);
   const editorBoothLabelOffsetsRef = useRef({});
@@ -1633,8 +1663,6 @@ export function OsmMapPage({ isUserMode = true, onUserModeChange }) {
 
   const [ways, setWays] = useState([]);
   const [stationMarkers, setStationMarkers] = useState([]);
-  const [status, setStatus] = useState("Loading OSM map...");
-  const [circleOverlayStatus, setCircleOverlayStatus] = useState("Loading circle data...");
   const [selectedCircleDay, setSelectedCircleDay] = useState("day1");
   const [circleRows, setCircleRows] = useState([]);
   const [selectedLabelColorIndexes, setSelectedLabelColorIndexes] = useState([]);
@@ -1642,7 +1670,6 @@ export function OsmMapPage({ isUserMode = true, onUserModeChange }) {
   const [isHoverClickableBooth, setIsHoverClickableBooth] = useState(false);
   const [isHallLabelPanelOpen, setIsHallLabelPanelOpen] = useState(true);
   const [hiddenHallLabels, setHiddenHallLabels] = useState([]);
-  const [debugHitText, setDebugHitText] = useState("Debug: 点击地图以查看命中对象");
   const [isSpacePressed, setIsSpacePressed] = useState(false);
   const [isPanning, setIsPanning] = useState(false);
   const [selectedLevels, setSelectedLevels] = useState([]);
@@ -1650,7 +1677,6 @@ export function OsmMapPage({ isUserMode = true, onUserModeChange }) {
   const [editorPages, setEditorPages] = useState([]);
   const [loadedEditorPageNumbers, setLoadedEditorPageNumbers] = useState([]);
   const [selectedEditorPageNumber, setSelectedEditorPageNumber] = useState(1);
-  const [editorOverlayStatus, setEditorOverlayStatus] = useState("Map editor overlay not loaded");
   const [showEditorOverlay, setShowEditorOverlay] = useState(false);
   const [showEditorLabels, setShowEditorLabels] = useState(false);
   const [isEditorOverlayMoveMode, setIsEditorOverlayMoveMode] = useState(true);
@@ -1658,7 +1684,6 @@ export function OsmMapPage({ isUserMode = true, onUserModeChange }) {
   const [editorPageOverlays, setEditorPageOverlays] = useState({});
   const [editorPageIslandLabelSettings, setEditorPageIslandLabelSettings] = useState({});
   const [editorBoothLabelOffsets, setEditorBoothLabelOffsets] = useState({});
-  const [editorTransformSaveStatus, setEditorTransformSaveStatus] = useState("");
   const [selectedEditorEntityId, setSelectedEditorEntityId] = useState("");
   const [mapRotationDeg, setMapRotationDeg] = useState(34);
   const [viewState, setViewState] = useState({ zoom: 1, offsetX: 0, offsetY: 0 });
@@ -1697,6 +1722,7 @@ export function OsmMapPage({ isUserMode = true, onUserModeChange }) {
         const forceLevelVisible = stepConnectorVisibleWayIds.has(item.way.id);
         return {
           ...item,
+          bounds: getPointBounds(item.way.points),
           forceLevelVisible,
           style: applyLevelFocusStyle(item.style, selectedLevels, forceLevelVisible)
         };
@@ -1778,6 +1804,10 @@ export function OsmMapPage({ isUserMode = true, onUserModeChange }) {
   );
 
   useEffect(() => {
+    viewStateRef.current = viewState;
+  }, [viewState]);
+
+  useEffect(() => {
     editorBoothLabelOffsetsRef.current = editorBoothLabelOffsets;
   }, [editorBoothLabelOffsets]);
 
@@ -1786,6 +1816,18 @@ export function OsmMapPage({ isUserMode = true, onUserModeChange }) {
       if (uiPreferencesSaveTimerRef.current) {
         clearTimeout(uiPreferencesSaveTimerRef.current);
         uiPreferencesSaveTimerRef.current = null;
+      }
+      if (viewUpdateFrameRef.current) {
+        cancelAnimationFrame(viewUpdateFrameRef.current);
+        viewUpdateFrameRef.current = 0;
+      }
+      if (hoverHitFrameRef.current) {
+        cancelAnimationFrame(hoverHitFrameRef.current);
+        hoverHitFrameRef.current = 0;
+      }
+      if (boothLabelOffsetFrameRef.current) {
+        cancelAnimationFrame(boothLabelOffsetFrameRef.current);
+        boothLabelOffsetFrameRef.current = 0;
       }
     };
   }, []);
@@ -1974,34 +2016,9 @@ export function OsmMapPage({ isUserMode = true, onUserModeChange }) {
     return Boolean(resolveBoothCircle(hitResult.entity, hitResult.graph));
   }
 
-  function formatDebugHitText(hitResult) {
-    if (!hitResult?.type) {
-      return "Debug: 命中空白";
-    }
-    if (hitResult.type === "hall") {
-      return `Debug: 命中 hall [P${hitResult.pageNumber || "-"}] (${hitResult.entity?.id || "-"})`;
-    }
-    if (hitResult.type === "island") {
-      const islandRaw = String(hitResult.entity?.raw || "").trim();
-      return `Debug: 命中 island ${islandRaw || "-"} [P${hitResult.pageNumber || "-"}] (${hitResult.entity?.id || "-"})`;
-    }
-    if (hitResult.type === "group") {
-      return `Debug: 命中 group [P${hitResult.pageNumber || "-"}] (${hitResult.entity?.id || "-"})`;
-    }
-    if (hitResult.type === "booth") {
-      const boothNumber = String(hitResult.entity?.boothNumber || "").trim();
-      const boothSuffix = normalizeBoothSuffix(hitResult.entity?.boothSuffix);
-      const boothCode = `${boothNumber}${boothSuffix ? boothSuffix.toUpperCase() : ""}`;
-      const islandCode = findBoothIslandCodeFromGraph(hitResult.graph, hitResult.entity) || "-";
-      return `Debug: 命中 booth ${boothCode || "-"} / island ${islandCode} [P${hitResult.pageNumber || "-"}] (${hitResult.entity?.id || "-"})`;
-    }
-    return `Debug: 命中 ${hitResult.type}`;
-  }
-
   useEffect(() => {
     let isMounted = true;
     async function loadLockedOsm() {
-      setStatus("Loading OSM map...");
       try {
         const response = await fetch(`${OSM_FILE_API}?path=${encodeURIComponent(LOCKED_OSM_FILE)}`);
         const json = await readJson(response);
@@ -2011,7 +2028,6 @@ export function OsmMapPage({ isUserMode = true, onUserModeChange }) {
         }
         setWays(parsed.ways);
         setStationMarkers(parsed.stationMarkers || []);
-        setStatus(`${LOCKED_OSM_FILE}: ${parsed.ways.length} paths`);
 
         const canvas = canvasRef.current;
         if (canvas && parsed.bounds) {
@@ -2020,11 +2036,10 @@ export function OsmMapPage({ isUserMode = true, onUserModeChange }) {
             setViewState(nextViewState);
           }
         }
-      } catch (error) {
+      } catch {
         if (isMounted) {
           setWays([]);
           setStationMarkers([]);
-          setStatus(error.message || "Failed to load OSM map");
         }
       }
     }
@@ -2037,7 +2052,6 @@ export function OsmMapPage({ isUserMode = true, onUserModeChange }) {
   useEffect(() => {
     let isMounted = true;
     async function loadCircleRows() {
-      setCircleOverlayStatus("Loading circle data...");
       try {
         const rows = await fetchAllCirclesFromApi(FAVORITE_CIRCLES_API, 200);
         if (!isMounted) {
@@ -2045,13 +2059,11 @@ export function OsmMapPage({ isUserMode = true, onUserModeChange }) {
         }
         const normalized = rows.map(normalizeCircle);
         setCircleRows(normalized);
-        setCircleOverlayStatus(`Circle data loaded: ${normalized.length}`);
-      } catch (error) {
+      } catch {
         if (!isMounted) {
           return;
         }
         setCircleRows([]);
-        setCircleOverlayStatus(error?.message || "Failed to load circle data");
       }
     }
 
@@ -2088,13 +2100,12 @@ export function OsmMapPage({ isUserMode = true, onUserModeChange }) {
     setShowEditorOverlay(true);
     setLoadedEditorPageNumbers(allEditorPageNumbers);
     setSelectedLevels((current) => (current.length ? current : [...USER_MODE_DEFAULT_LEVELS]));
-    setEditorOverlayStatus(`Loaded pages: ${allEditorPageNumbers.join(", ")}`);
   }, [allEditorPageNumbers, editorPages.length, isUserMode]);
 
   useEffect(() => {
     let isMounted = true;
+
     async function loadLatestEditorSnapshot() {
-      setEditorOverlayStatus("Loading map editor overlay...");
       try {
         const response = await fetch(`${MAP_EDITOR_SNAPSHOTS_API}/latest`);
         const json = await readJson(response);
@@ -2121,22 +2132,12 @@ export function OsmMapPage({ isUserMode = true, onUserModeChange }) {
         setSelectedLevels(savedUiPreferences.selectedLevels);
         setHiddenHallLabels(savedUiPreferences.hiddenHallLabels);
         const firstPageNumber = pages[0]?.page || 1;
-        setLoadedEditorPageNumbers(pages.length ? [firstPageNumber] : []);
+        setLoadedEditorPageNumbers(pages.map((page) => page.page));
         setSelectedEditorPageNumber(firstPageNumber);
         setEditorOverlay(nextPageOverlays[String(firstPageNumber)] || EDITOR_OVERLAY_DEFAULT);
         setShowEditorOverlay(Boolean(pages.length));
-        setEditorOverlayStatus(pages.length ? `Snapshot has ${pages.length} pages; loaded 1 page` : "No editor pages in latest snapshot");
-        const hasSavedData = Object.keys(savedTransforms.pageEntities || {}).length
-          || Object.keys(savedTransforms.pageIslandLabelSettings || {}).length
-          || Object.keys(savedTransforms.boothLabelOffsets || {}).length
-          || (savedUiPreferences.selectedLabelColorIndexes?.length || 0)
-          || (savedUiPreferences.selectedPathHighlightIds?.length || 0)
-          || (savedUiPreferences.selectedLevels?.length || 0)
-          || (savedUiPreferences.hiddenHallLabels?.length || 0)
-          || savedUiPreferences.selectedCircleDay === "day2";
-        setEditorTransformSaveStatus(hasSavedData ? "Saved transforms restored" : "");
         uiPreferencesHydratedRef.current = true;
-      } catch (error) {
+      } catch {
         if (!isMounted) {
           return;
         }
@@ -2148,14 +2149,13 @@ export function OsmMapPage({ isUserMode = true, onUserModeChange }) {
         setHiddenHallLabels([]);
         uiPreferencesHydratedRef.current = true;
         setShowEditorOverlay(false);
-        setEditorOverlayStatus(error.message || "Failed to load map editor overlay");
       }
     }
     loadLatestEditorSnapshot();
     return () => {
       isMounted = false;
     };
-  }, []);
+  }, [enableEditTools]);
 
   useEffect(() => {
     function handleKeyDown(event) {
@@ -2251,6 +2251,13 @@ export function OsmMapPage({ isUserMode = true, onUserModeChange }) {
       const lastGridY = Math.ceil(bottomWorld / GRID_WORLD_STEP) * GRID_WORLD_STEP;
 
       const expandedFirstGridX = Math.floor(minLeftWorld / GRID_WORLD_STEP) * GRID_WORLD_STEP;
+      const visibleWorldRect = {
+        x: minLeftWorld,
+        y: topWorld,
+        w: Math.max(1, rightWorld - minLeftWorld),
+        h: Math.max(1, bottomWorld - topWorld)
+      };
+      const visibleStyledWays = styledWays.filter((item) => rectsOverlap(item.bounds, visibleWorldRect, GRID_WORLD_STEP));
 
       context.save();
       context.translate(width / 2, height / 2);
@@ -2273,7 +2280,7 @@ export function OsmMapPage({ isUserMode = true, onUserModeChange }) {
       }
       context.stroke();
 
-      styledWays.forEach(({ way, style }) => {
+      visibleStyledWays.forEach(({ way, style }) => {
         if (style.fill && isClosedWay(way)) {
           context.fillStyle = style.fill;
           context.beginPath();
@@ -2293,7 +2300,7 @@ export function OsmMapPage({ isUserMode = true, onUserModeChange }) {
       });
 
       context.setLineDash([]);
-      styledWays.forEach(({ way, style }) => {
+      visibleStyledWays.forEach(({ way, style }) => {
         const direction = getOnewayDirection(style.tags);
         if (!direction) {
           return;
@@ -2303,7 +2310,7 @@ export function OsmMapPage({ isUserMode = true, onUserModeChange }) {
 
       context.textAlign = "center";
       context.textBaseline = "middle";
-      styledWays.forEach(({ way, style }) => {
+      visibleStyledWays.forEach(({ way, style }) => {
         if (!style.hallLabel) {
           return;
         }
@@ -2416,7 +2423,6 @@ export function OsmMapPage({ isUserMode = true, onUserModeChange }) {
     setSelectedEditorPageNumber(nextPageNumber);
     setLoadedEditorPageNumbers((current) => current.includes(nextPageNumber) ? current : [...current, nextPageNumber].sort((left, right) => left - right));
     setEditorOverlay(editorPageOverlays[String(nextPageNumber)] || EDITOR_OVERLAY_DEFAULT);
-    setEditorOverlayStatus(`Loaded pages: ${[...new Set([...loadedEditorPageNumbers, nextPageNumber])].sort((left, right) => left - right).join(", ")}`);
   }
 
   async function saveEditorTransforms() {
@@ -2442,10 +2448,8 @@ export function OsmMapPage({ isUserMode = true, onUserModeChange }) {
       await saveEditorOverlayTransformsToApi(payload);
       // Keep local copy as a fallback for offline/debug cases.
       window.localStorage.setItem(EDITOR_OVERLAY_STORAGE_KEY, JSON.stringify(payload));
-      setEditorTransformSaveStatus(`Saved transforms to server for ${pagesForSave.length} loaded pages`);
-    } catch (error) {
+    } catch {
       window.localStorage.setItem(EDITOR_OVERLAY_STORAGE_KEY, JSON.stringify(payload));
-      setEditorTransformSaveStatus(`Server save failed, saved locally: ${error?.message || "unknown error"}`);
     }
   }
 
@@ -2471,10 +2475,8 @@ export function OsmMapPage({ isUserMode = true, onUserModeChange }) {
     try {
       await saveEditorOverlayTransformsToApi(payload);
       window.localStorage.setItem(EDITOR_OVERLAY_STORAGE_KEY, JSON.stringify(payload));
-      setEditorTransformSaveStatus("Saved booth label positions");
-    } catch (error) {
+    } catch {
       window.localStorage.setItem(EDITOR_OVERLAY_STORAGE_KEY, JSON.stringify(payload));
-      setEditorTransformSaveStatus(`Server save failed, saved locally: ${error?.message || "unknown error"}`);
     }
   }
 
@@ -2509,7 +2511,7 @@ export function OsmMapPage({ isUserMode = true, onUserModeChange }) {
   }
 
   useEffect(() => {
-    if (!uiPreferencesHydratedRef.current || !editorPages.length) {
+    if (!enableEditTools || !uiPreferencesHydratedRef.current || !editorPages.length) {
       return;
     }
     if (uiPreferencesSaveTimerRef.current) {
@@ -2526,7 +2528,7 @@ export function OsmMapPage({ isUserMode = true, onUserModeChange }) {
         uiPreferencesSaveTimerRef.current = null;
       }
     };
-  }, [editorPages.length, hiddenHallLabels, selectedCircleDay, selectedLabelColorIndexes, selectedPathHighlightIds, selectedLevels]);
+  }, [editorPages.length, enableEditTools, hiddenHallLabels, selectedCircleDay, selectedLabelColorIndexes, selectedPathHighlightIds, selectedLevels]);
 
   function nudgeEditorOverlay(deltaX, deltaY) {
     setEditorOverlay((current) => ({
@@ -2617,8 +2619,108 @@ export function OsmMapPage({ isUserMode = true, onUserModeChange }) {
     };
   }
 
+  function scheduleViewStateUpdate(updater) {
+    const previousUpdater = pendingViewUpdateRef.current;
+    pendingViewUpdateRef.current = previousUpdater
+      ? (current) => updater(previousUpdater(current))
+      : updater;
+
+    if (viewUpdateFrameRef.current) {
+      return;
+    }
+
+    viewUpdateFrameRef.current = requestAnimationFrame(() => {
+      viewUpdateFrameRef.current = 0;
+      const nextUpdater = pendingViewUpdateRef.current;
+      pendingViewUpdateRef.current = null;
+      if (!nextUpdater) {
+        return;
+      }
+      setViewState((current) => {
+        const next = nextUpdater(current);
+        viewStateRef.current = next;
+        return next;
+      });
+    });
+  }
+
+  function scheduleBoothLabelOffset(labelKey, offset) {
+    pendingBoothLabelOffsetsRef.current = {
+      ...pendingBoothLabelOffsetsRef.current,
+      [labelKey]: offset
+    };
+
+    if (boothLabelOffsetFrameRef.current) {
+      return;
+    }
+
+    boothLabelOffsetFrameRef.current = requestAnimationFrame(() => {
+      boothLabelOffsetFrameRef.current = 0;
+      const pendingOffsets = pendingBoothLabelOffsetsRef.current;
+      pendingBoothLabelOffsetsRef.current = {};
+      if (!Object.keys(pendingOffsets).length) {
+        return;
+      }
+      setEditorBoothLabelOffsets((current) => {
+        const next = { ...current, ...pendingOffsets };
+        editorBoothLabelOffsetsRef.current = next;
+        return next;
+      });
+    });
+  }
+
+  function flushBoothLabelOffsets() {
+    const pendingOffsets = pendingBoothLabelOffsetsRef.current;
+    pendingBoothLabelOffsetsRef.current = {};
+    if (boothLabelOffsetFrameRef.current) {
+      cancelAnimationFrame(boothLabelOffsetFrameRef.current);
+      boothLabelOffsetFrameRef.current = 0;
+    }
+    if (!Object.keys(pendingOffsets).length) {
+      return;
+    }
+    setEditorBoothLabelOffsets((current) => {
+      const next = { ...current, ...pendingOffsets };
+      editorBoothLabelOffsetsRef.current = next;
+      return next;
+    });
+  }
+
+  function scheduleHoverHit(canvasPoint) {
+    pendingHoverCanvasPointRef.current = canvasPoint;
+    if (hoverHitFrameRef.current) {
+      return;
+    }
+
+    hoverHitFrameRef.current = requestAnimationFrame(() => {
+      hoverHitFrameRef.current = 0;
+      const pendingPoint = pendingHoverCanvasPointRef.current;
+      pendingHoverCanvasPointRef.current = null;
+      if (!pendingPoint) {
+        setIsHoverClickableBooth(false);
+        return;
+      }
+      const worldPoint = toWorldPoint(pendingPoint, {
+        ...viewStateRef.current,
+        rotationDeg: mapRotationDeg,
+        viewportWidth: canvasRef.current?.clientWidth || 0,
+        viewportHeight: canvasRef.current?.clientHeight || 0
+      });
+      const hitResult = findOverlayHitAtWorldPoint(worldPoint);
+      const nextHoverClickable = isClickableBoothHit(hitResult);
+      setIsHoverClickableBooth((current) => current === nextHoverClickable ? current : nextHoverClickable);
+    });
+  }
+
   function handlePointerDown(event) {
-    if (event.button === 0 && !isSpacePressed && showEditorOverlay) {
+    const beginPanDrag = () => {
+      event.preventDefault();
+      dragStateRef.current = { type: "pan", pointerId: event.pointerId, lastX: event.clientX, lastY: event.clientY };
+      setIsPanning(true);
+      canvasRef.current?.setPointerCapture(event.pointerId);
+    };
+
+    if (enableEditTools && event.button === 0 && !isSpacePressed && showEditorOverlay) {
       const canvasPoint = getCanvasPoint(event);
       if (canvasPoint) {
         const labelHit = findDraggableLabelAtCanvasPoint(canvasPoint);
@@ -2646,26 +2748,14 @@ export function OsmMapPage({ isUserMode = true, onUserModeChange }) {
       }
     }
 
-    if (event.button === 0 && !isSpacePressed) {
-      const canvasPoint = getCanvasPoint(event);
-      if (canvasPoint) {
-        const worldPoint = toWorldPoint(canvasPoint, {
-          ...viewState,
-          rotationDeg: mapRotationDeg,
-          viewportWidth: canvasRef.current?.clientWidth || 0,
-          viewportHeight: canvasRef.current?.clientHeight || 0
-        });
-        const hitResult = showEditorOverlay ? findOverlayHitAtWorldPoint(worldPoint) : null;
-        setDebugHitText(formatDebugHitText(hitResult));
-      } else {
-        setDebugHitText("Debug: 命中空白");
-      }
-    }
-
-    if (event.button === 0 && isUserMode && !isSpacePressed && showEditorOverlay) {
+    if (event.button === 0 && isUserMode && !isSpacePressed) {
       const canvasPoint = getCanvasPoint(event);
       if (!canvasPoint) {
         setSelectedBoothCircle(null);
+        return;
+      }
+      if (!showEditorOverlay) {
+        beginPanDrag();
         return;
       }
       const worldPoint = toWorldPoint(canvasPoint, {
@@ -2677,13 +2767,19 @@ export function OsmMapPage({ isUserMode = true, onUserModeChange }) {
       const hitResult = findOverlayHitAtWorldPoint(worldPoint);
       if (!hitResult || hitResult.type !== "booth") {
         setSelectedBoothCircle(null);
+        beginPanDrag();
         return;
       }
       const matchedCircle = resolveBoothCircle(hitResult.entity, hitResult.graph);
+      if (!matchedCircle) {
+        setSelectedBoothCircle(null);
+        beginPanDrag();
+        return;
+      }
       setSelectedBoothCircle(matchedCircle);
       return;
     }
-    if (event.button === 0 && !isSpacePressed && isEditorOverlayMoveMode && showEditorOverlay && selectedEditorPage) {
+    if (enableEditTools && event.button === 0 && !isSpacePressed && isEditorOverlayMoveMode && showEditorOverlay && selectedEditorPage) {
       event.preventDefault();
       dragStateRef.current = { type: "editor-overlay", pointerId: event.pointerId, lastX: event.clientX, lastY: event.clientY };
       canvasRef.current?.setPointerCapture(event.pointerId);
@@ -2692,10 +2788,7 @@ export function OsmMapPage({ isUserMode = true, onUserModeChange }) {
     if (event.button !== 0 || !isSpacePressed) {
       return;
     }
-    event.preventDefault();
-    dragStateRef.current = { type: "pan", pointerId: event.pointerId, lastX: event.clientX, lastY: event.clientY };
-    setIsPanning(true);
-    canvasRef.current?.setPointerCapture(event.pointerId);
+    beginPanDrag();
   }
 
   function handlePointerMove(event) {
@@ -2720,13 +2813,10 @@ export function OsmMapPage({ isUserMode = true, onUserModeChange }) {
       if (!labelKey) {
         return;
       }
-      setEditorBoothLabelOffsets((current) => ({
-        ...current,
-        [labelKey]: {
-          dx: roundCoordinate(nextAnchor.x - center.x),
-          dy: roundCoordinate(nextAnchor.y - center.y)
-        }
-      }));
+      scheduleBoothLabelOffset(labelKey, {
+        dx: roundCoordinate(nextAnchor.x - center.x),
+        dy: roundCoordinate(nextAnchor.y - center.y)
+      });
       dragStateRef.current.lastX = event.clientX;
       dragStateRef.current.lastY = event.clientY;
       return;
@@ -2755,15 +2845,7 @@ export function OsmMapPage({ isUserMode = true, onUserModeChange }) {
           setIsHoverClickableBooth(false);
           return;
         }
-        const worldPoint = toWorldPoint(canvasPoint, {
-          ...viewState,
-          rotationDeg: mapRotationDeg,
-          viewportWidth: canvasRef.current?.clientWidth || 0,
-          viewportHeight: canvasRef.current?.clientHeight || 0
-        });
-        const hitResult = findOverlayHitAtWorldPoint(worldPoint);
-        const nextHoverClickable = isClickableBoothHit(hitResult);
-        setIsHoverClickableBooth((current) => current === nextHoverClickable ? current : nextHoverClickable);
+        scheduleHoverHit(canvasPoint);
       } else {
         setIsHoverClickableBooth(false);
       }
@@ -2777,7 +2859,7 @@ export function OsmMapPage({ isUserMode = true, onUserModeChange }) {
     const rotationRad = (mapRotationDeg * Math.PI) / 180;
     const cos = Math.cos(rotationRad);
     const sin = Math.sin(rotationRad);
-    setViewState((current) => ({
+    scheduleViewStateUpdate((current) => ({
       ...current,
       offsetX: current.offsetX + dx * cos + dy * sin,
       offsetY: current.offsetY - dx * sin + dy * cos
@@ -2792,6 +2874,7 @@ export function OsmMapPage({ isUserMode = true, onUserModeChange }) {
     dragStateRef.current = { type: "none", pointerId: null, lastX: 0, lastY: 0 };
     setIsPanning(false);
     if (shouldSaveLabelOffsets) {
+      flushBoothLabelOffsets();
       void saveBoothLabelOffsets();
     }
   }
@@ -2803,7 +2886,7 @@ export function OsmMapPage({ isUserMode = true, onUserModeChange }) {
       return;
     }
 
-    setViewState((current) => {
+    scheduleViewStateUpdate((current) => {
       const nextZoom = clamp(current.zoom * Math.exp(-event.deltaY * 0.0015), 0.03, 80);
       const viewportWidth = canvasRef.current?.clientWidth || 0;
       const viewportHeight = canvasRef.current?.clientHeight || 0;
@@ -2944,7 +3027,7 @@ export function OsmMapPage({ isUserMode = true, onUserModeChange }) {
           </Stack>
         </Paper>
       </Stack>
-      {!isUserMode ? <Box
+      {enableEditTools && !isUserMode ? <Box
         sx={{
           position: "fixed",
           top: 72,

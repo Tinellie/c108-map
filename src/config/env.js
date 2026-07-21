@@ -18,7 +18,7 @@ export const config = {
     connectionLimit: Number(process.env.MYSQL_CONNECTION_LIMIT || 10)
   },
   puppeteer: {
-    headless: process.env.PUPPETEER_HEADLESS !== "false",
+    headless: process.env.PUPPETEER_HEADLESS === "true",
     navigationTimeoutMs: Number(process.env.PUPPETEER_NAVIGATION_TIMEOUT_MS || 45000),
     executablePath: process.env.CHROME_EXECUTABLE_PATH || "",
     userDataDir: process.env.CHROME_USER_DATA_DIR || "",

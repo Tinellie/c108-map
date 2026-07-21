@@ -37,13 +37,7 @@
   - 产出：按 saveId 版本化页面快照、meta、分页 page-*.json。
   - 后续存储：storage/map_extracted/edits/<saveId>。
 
-6. 编辑器上传图像（Map Editor 2）
-  - 输入类型：前端 data URL（base64 图片）。
-  - 进入组件：POST /api/maps。
-  - 产出：去重后的图片文件（sha256 命名）与对象 JSON。
-  - 后续存储：storage/maps/images、storage/maps/<saveId>.json。
-
-7. 颜色偏好输入（前端拖拽排序 + 别名）
+6. 颜色偏好输入（前端拖拽排序 + 别名）
   - 输入类型：JSON items[]。
   - 进入组件：PUT /api/color-preferences、colorPreferenceRepository。
   - 产出：更新后的 sort_priority 与 alias_name。
@@ -72,21 +66,14 @@
   - 读写存储：任务状态在服务内存中；任务运行后写 MySQL 与 storage/images。
   - 操作数据：爬虫任务请求参数、任务摘要统计。
 
-3. /map（MapPage，Map Editor 2）
-  - 子功能：读取已转存页面、画布编辑对象（hall/island/group/booth/image）、上传图片对象、保存当前对象、加载最新保存。
-  - 输入：GET /api/map/pages、GET /api/map/pages/:page、GET /api/maps/latest。
-  - 输出：POST /api/maps（objects + assets[dataURL]）。
-  - 读写存储：读取 storage/map/meta.json 与 storage/map/pages；写 storage/maps/*.json 与 storage/maps/images/*。
-  - 操作数据：对象 transform、层级 parentId、图像资产路径。
-
-4. /osm-canvas（OsmCanvasPage）
+3. /osm-canvas（OsmCanvasPage）
   - 子功能：列出 OSM 文件、加载单个 OSM 文本、在画布渲染线段/区域。
   - 输入：GET /api/osm/files、GET /api/osm/file?path=...。
   - 输出：前端画布渲染结果（无后端写入）。
   - 读写存储：只读 storage/osm。
   - 操作数据：OSM way/node/tag 的前端解析结构。
 
-5. /osm-map（OsmMapPage）
+4. /osm-map（OsmMapPage）
   - 子功能：OSM 地图显示、层级过滤、路径高亮、用户模式切换、叠加编辑器快照实体、圈子联动抽屉。
   - 输入：
     - GET /api/osm/file。
@@ -96,7 +83,7 @@
   - 读写存储：读 storage/osm、storage/map、MySQL.favorite_circles；写 storage/map/overlay-transforms.json。
   - 操作数据：OSM 几何、overlay transform、实体标签与圈子映射。
 
-6. /map-editor（MapEditorPage）
+5. /map-editor（MapEditorPage）
   - 子功能：加载抽取结果、框选/移动/旋转实体、编号规则应用、尺寸校正、快照保存、快照回退、快照转存到 storage/map。
   - 输入：GET /api/map/extraction、GET /api/map/editor-snapshots/latest、GET /api/map/editor-snapshots/previous。
   - 输出：
@@ -106,7 +93,7 @@
   - 读写存储：读 storage/map_extracted；写 storage/map_extracted/edits 与 storage/map。
   - 操作数据：page.entities（booths/groups/islands/halls）、summary 元数据。
 
-7. /map-editor/convert-data（ConvertDataPage）
+6. /map-editor/convert-data（ConvertDataPage）
   - 子功能：读取 latest snapshot，勾选页面，设置输出编号。
   - 输入：GET /api/map/editor-snapshots/latest。
   - 输出：当前仅前端状态提示，转换提交尚未实现。
@@ -237,7 +224,7 @@
 17. GET /api/map/editor-snapshots/overlay-transforms
    - 用途：读取 OSM 叠加参数。
    - 输入：无。
-   - 输出：{pageOverlays,pageEntities,pageIslandLabelSettings}。
+  - 输出：{pageOverlays,pageHalls,pageIslandLabelSettings}。
    - 存储：读 storage/map/overlay-transforms.json。
    - 操作数据：叠加平移/缩放/标注配置。
 
@@ -276,35 +263,21 @@
    - 存储：读 storage/osm/<path>。
    - 操作数据：OSM XML 内容。
 
-23. POST /api/maps
-   - 用途：保存 Map Editor 2 结果。
-   - 输入：{objects,assets}，assets 含 base64 data URL。
-   - 输出：{saveId,path,objectCount,objects}。
-   - 存储：写 storage/maps/<saveId>.json、storage/maps/images/<sha256>.<ext>。
-   - 操作数据：对象树、图片资产映射。
-
-24. GET /api/maps/latest
-   - 用途：读取最新保存的 Map Editor 2 数据。
-   - 输入：无。
-   - 输出：最新 savePayload。
-   - 存储：读 storage/maps/*.json。
-   - 操作数据：最新对象场景。
-
-25. GET /api/favorite-circles
+23. GET /api/favorite-circles
    - 用途：圈子列表与搜索。
    - 输入：q、limit、page、offset。
    - 输出：data[] + pagination，含 local_image_urls。
    - 存储：读 MySQL.favorite_circles。
    - 操作数据：圈子主记录与图片路径 JSON。
 
-26. GET /api/favorite-circles/:circleId
+24. GET /api/favorite-circles/:circleId
    - 用途：圈子详情。
    - 输入：circleId。
    - 输出：单条圈子记录（含 local_image_paths/local_image_urls）。
    - 存储：读 MySQL.favorite_circles。
    - 操作数据：圈子全部字段。
 
-27. GET /api/favorite-circles/:circleId/images
+25. GET /api/favorite-circles/:circleId/images
    - 用途：仅返回圈子图片集合。
    - 输入：circleId。
    - 输出：{circle_id,local_image_paths,local_image_urls}。
@@ -422,17 +395,7 @@
   - 写入组件：snapshot transfer、overlay transform 保存。
   - 读取组件：/api/map/pages*、/api/map/editor-snapshots/overlay-transforms。
 
-5. storage/maps
-  - 类型：Map Editor 2 保存的场景 JSON。
-  - 写入组件：POST /api/maps。
-  - 读取组件：GET /api/maps/latest。
-
-6. storage/maps/images
-  - 类型：去重图片资产文件。
-  - 写入组件：POST /api/maps。
-  - 读取组件：前端通过 /storage 访问。
-
-7. storage/osm
+5. storage/osm
   - 类型：.osm XML 文件。
   - 写入方式：人工放置或外部流程产出。
   - 读取组件：/api/osm/files、/api/osm/file、OsmCanvasPage、OsmMapPage。

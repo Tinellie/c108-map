@@ -8,6 +8,7 @@ import {
   FormControl,
   InputLabel,
   MenuItem,
+  LinearProgress,
   Paper,
   Select,
   Stack,
@@ -54,6 +55,17 @@ function statusColor(status) {
   }
 
   return "default";
+}
+
+function getDetailProgressValue(progress) {
+  const total = Number(progress?.detailTotal || 0);
+  const done = Number(progress?.detailDone || 0);
+
+  if (!total || total <= 0) {
+    return 0;
+  }
+
+  return Math.min(100, Math.max(0, (done / total) * 100));
 }
 
 async function readJson(response) {
@@ -235,6 +247,28 @@ export function CrawlRunnerPage() {
                   <Typography variant="body2" color="text.secondary">
                     Started: {runningJob.startedAt}
                   </Typography>
+                  {runningJob.progress ? (
+                    <Stack spacing={1} sx={{ pt: 1 }}>
+                      <Typography variant="body2" color="text.secondary">
+                        原项目数: {runningJob.progress.originalCount}
+                        {runningJob.progress.newCount > 0 ? `，新项目数: ${runningJob.progress.newCount}` : ""}
+                      </Typography>
+                      {runningJob.progress.stage === "detail" ? (
+                        <Stack spacing={0.75}>
+                          <LinearProgress variant="determinate" value={getDetailProgressValue(runningJob.progress)} />
+                          <Typography variant="body2" color="text.secondary">
+                            detail 读取中: {runningJob.progress.detailDone}/{runningJob.progress.detailTotal}
+                            {runningJob.progress.detailFailed ? `，失败 ${runningJob.progress.detailFailed}` : ""}
+                          </Typography>
+                        </Stack>
+                      ) : null}
+                      {runningJob.progress.message ? (
+                        <Typography variant="body2" color="text.secondary">
+                          {runningJob.progress.message}
+                        </Typography>
+                      ) : null}
+                    </Stack>
+                  ) : null}
                 </Stack>
               </Paper>
             ) : (

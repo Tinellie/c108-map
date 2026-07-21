@@ -1,5 +1,4 @@
 import cors from "cors";
-import crypto from "node:crypto";
 import express from "express";
 import fs from "node:fs/promises";
 import path from "path";
@@ -141,22 +140,6 @@ function resolveOsmFilePath(relativePath) {
     return null;
   }
   return absolutePath;
-}
-
-function getImageExtension({ fileName, mimeType }) {
-  const extension = path.extname(String(fileName || "")).replace(/[^A-Za-z0-9.]/g, "").toLowerCase();
-  if (extension) {
-    return extension;
-  }
-
-  const mimeExtensions = {
-    "image/jpeg": ".jpg",
-    "image/png": ".png",
-    "image/webp": ".webp",
-    "image/gif": ".gif",
-    "image/svg+xml": ".svg"
-  };
-  return mimeExtensions[String(mimeType || "").toLowerCase()] || ".bin";
 }
 
 async function readTransferredMapMeta() {
@@ -462,105 +445,6 @@ app.get("/api/osm/file", async (req, res) => {
   }
 });
 
-app.post("/api/maps", async (req, res) => {
-  try {
-    const objects = Array.isArray(req.body?.objects) ? req.body.objects : [];
-    const assets = Array.isArray(req.body?.assets) ? req.body.assets : [];
-    const now = new Date();
-    const pad2 = (value) => String(value).padStart(2, "0");
-    const saveId = `${now.getFullYear()}${pad2(now.getMonth() + 1)}${pad2(now.getDate())}-${pad2(now.getHours())}${pad2(now.getMinutes())}${pad2(now.getSeconds())}-${Math.random().toString(36).slice(2, 8)}`;
-    const mapsRoot = path.join(projectRoot, "storage", "maps");
-    const imagesRoot = path.join(mapsRoot, "images");
-
-    await fs.mkdir(imagesRoot, { recursive: true });
-
-    const assetPathByObjectId = new Map();
-    for (const asset of assets) {
-      const objectId = String(asset?.objectId || "");
-      const fileName = String(asset?.fileName || "image");
-      const dataUrl = String(asset?.dataUrl || "");
-      const match = dataUrl.match(/^data:([^;]+);base64,(.+)$/);
-      if (!objectId || !match) {
-        continue;
-      }
-
-      const buffer = Buffer.from(match[2], "base64");
-      const hash = crypto.createHash("sha256").update(buffer).digest("hex");
-      const extension = getImageExtension({ fileName, mimeType: match[1] });
-      const libraryFileName = `${hash}${extension}`;
-      const relativePath = path.posix.join("storage", "maps", "images", libraryFileName);
-      const imagePath = path.join(imagesRoot, libraryFileName);
-      try {
-        await fs.writeFile(imagePath, buffer, { flag: "wx" });
-      } catch (error) {
-        if (error?.code !== "EEXIST") {
-          throw error;
-        }
-      }
-      assetPathByObjectId.set(objectId, relativePath);
-    }
-
-    const savedObjects = objects.map((object) => {
-      const nextObject = {
-        id: String(object?.id || ""),
-        type: String(object?.type || ""),
-        name: String(object?.name || ""),
-        parentId: String(object?.parentId || ""),
-        metadata: object?.metadata && typeof object.metadata === "object" ? object.metadata : {},
-        transform: object?.transform && typeof object.transform === "object" ? object.transform : {}
-      };
-      if (object?.type === "image") {
-        nextObject.imagePath = assetPathByObjectId.get(nextObject.id) || String(object?.imagePath || object?.imageUrl || "");
-      }
-      return nextObject;
-    });
-
-    const savePayload = {
-      saveId,
-      createdAt: now.toISOString(),
-      objectCount: savedObjects.length,
-      objects: savedObjects
-    };
-    const savePath = path.join(mapsRoot, `${saveId}.json`);
-    await fs.writeFile(savePath, JSON.stringify(savePayload, null, 2), "utf-8");
-
-    res.status(201).json({ data: { saveId, path: path.posix.join("storage", "maps", `${saveId}.json`), objectCount: savedObjects.length, objects: savedObjects } });
-  } catch (error) {
-    logError("Save editor2 map failed", error);
-    res.status(500).json({ message: "internal server error" });
-  }
-});
-
-app.get("/api/maps/latest", async (_req, res) => {
-  try {
-    const mapsRoot = path.join(projectRoot, "storage", "maps");
-    const entries = await fs.readdir(mapsRoot, { withFileTypes: true });
-    const jsonFiles = entries.filter((entry) => entry.isFile() && entry.name.endsWith(".json"));
-    if (!jsonFiles.length) {
-      return res.status(404).json({ message: "saved map not found" });
-    }
-
-    const candidates = (await Promise.all(jsonFiles.map(async (entry) => {
-      const filePath = path.join(mapsRoot, entry.name);
-      const parsed = JSON.parse(await fs.readFile(filePath, "utf-8"));
-      return {
-        ...parsed,
-        path: path.posix.join("storage", "maps", entry.name),
-        sortTime: Date.parse(parsed.createdAt || "") || 0
-      };
-    }))).sort((left, right) => right.sortTime - left.sortTime);
-
-    res.json({ data: candidates[0] });
-  } catch (error) {
-    if (error?.code === "ENOENT") {
-      return res.status(404).json({ message: "saved map not found" });
-    }
-
-    logError("Load latest editor2 map failed", error);
-    res.status(500).json({ message: "internal server error" });
-  }
-});
-
 app.get("/api/map/editor-snapshots/latest", async (_req, res) => {
   try {
     const snapshot = await readLatestMapEditorSnapshot();
@@ -581,12 +465,12 @@ app.get("/api/map/editor-snapshots/overlay-transforms", async (_req, res) => {
     const raw = await fs.readFile(filePath, "utf-8");
     const parsed = JSON.parse(raw);
     if (!parsed || typeof parsed !== "object") {
-      return res.json({ data: { pageOverlays: {}, pageEntities: {}, pageIslandLabelSettings: {} } });
+      return res.json({ data: { pageOverlays: {}, pageHalls: {}, pageIslandLabelSettings: {} } });
     }
     res.json({ data: parsed });
   } catch (error) {
     if (error?.code === "ENOENT") {
-      return res.json({ data: { pageOverlays: {}, pageEntities: {}, pageIslandLabelSettings: {} } });
+      return res.json({ data: { pageOverlays: {}, pageHalls: {}, pageIslandLabelSettings: {} } });
     }
 
     logError("Read map overlay transforms failed", error);

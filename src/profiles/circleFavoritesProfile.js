@@ -1,6 +1,6 @@
 export const circleFavoritesProfile = {
   name: "circle-favorites",
-  description: "Extract circle favorites rows from webcatalog.circle.ms",
+  description: "Extract circle favorites rows from classic-webcatalog.circle.ms",
   loginWait: {
     enabled: true,
     // If title contains this keyword, treat page as login state.

@@ -36,6 +36,25 @@ function sanitizeSummary(summary) {
   };
 }
 
+function sanitizeProgress(progress) {
+  if (!progress || typeof progress !== "object") {
+    return null;
+  }
+
+  return {
+    stage: String(progress.stage || "").trim() || "unknown",
+    originalCount: Number(progress.originalCount || 0),
+    newCount: Number(progress.newCount || 0),
+    totalCount: Number(progress.totalCount || 0),
+    pagesProcessed: Number(progress.pagesProcessed || 0),
+    detailDone: Number(progress.detailDone || 0),
+    detailTotal: Number(progress.detailTotal || 0),
+    detailFailed: Number(progress.detailFailed || 0),
+    message: String(progress.message || "").trim(),
+    currentCircleId: String(progress.currentCircleId || "").trim()
+  };
+}
+
 function toPublicJob(job) {
   if (!job) {
     return null;
@@ -54,6 +73,7 @@ function toPublicJob(job) {
       crawlMode: job.request.crawlMode
     },
     summary: sanitizeSummary(job.summary),
+    progress: sanitizeProgress(job.progress),
     error: job.error || null
   };
 }
@@ -181,16 +201,39 @@ export function startCrawlJob(input) {
       crawlMode
     },
     summary: null,
+    progress: {
+      stage: "starting",
+      originalCount: 0,
+      newCount: 0,
+      totalCount: 0,
+      pagesProcessed: 0,
+      detailDone: 0,
+      detailTotal: 0,
+      detailFailed: 0,
+      message: ""
+    },
     error: null
   };
 
   runningJob = job;
 
+  const updateProgress = (nextProgress) => {
+    if (!nextProgress || typeof nextProgress !== "object") {
+      return;
+    }
+
+    job.progress = {
+      ...(job.progress || {}),
+      ...nextProgress
+    };
+  };
+
   const done = runCrawlPipeline({
     url,
     profile,
     headlessOverride,
-    crawlMode
+    crawlMode,
+    onProgress: updateProgress
   })
     .then((summary) => {
       job.status = "succeeded";

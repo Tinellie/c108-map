@@ -1,22 +1,40 @@
-import { useEffect, useState } from "react";
-import { AppBar, Box, Button, FormControlLabel, Stack, Switch, Toolbar, Typography } from "@mui/material";
+import { lazy, Suspense, useEffect, useState } from "react";
+import { AppBar, Box, Button, CircularProgress, FormControlLabel, Stack, Switch, Toolbar, Typography } from "@mui/material";
 import { Link as RouterLink, Navigate, Route, Routes, useLocation } from "react-router-dom";
-import { CrawlRunnerPage } from "./pages/CrawlRunnerPage";
-import { CirclesViewerPage } from "./pages/CirclesViewerPage";
-import { MapEditorPage } from "./pages/MapEditorPage";
-import { OsmMapPage } from "./pages/OsmMapPage";
+
+function lazyNamedPage(loader, exportName) {
+  return lazy(() => loader().then((module) => ({ default: module[exportName] })));
+}
+
+const CrawlRunnerPage = lazyNamedPage(() => import("./pages/CrawlRunnerPage"), "CrawlRunnerPage");
+const CirclesViewerPage = lazyNamedPage(() => import("./pages/CirclesViewerPage"), "CirclesViewerPage");
+const MapEditorPage = lazyNamedPage(() => import("./pages/MapEditorPage"), "MapEditorPage");
+const OsmMapPage = lazyNamedPage(() => import("./pages/OsmMapPage"), "OsmMapPage");
+
+const NAV_ITEMS = [
+  { path: "/viewer", label: "Viewer", isActive: (pathname) => pathname === "/viewer" || pathname === "/", userMode: true },
+  { path: "/crawler", label: "Update Circle", isActive: (pathname) => pathname.startsWith("/crawler"), userMode: false },
+  { path: "/osm-map", label: "OSM Map", isActive: (pathname) => pathname === "/osm-map", userMode: true },
+  { path: "/map-editor", label: "Processing Booth", isActive: (pathname) => pathname.startsWith("/map-editor"), userMode: false },
+  { path: "/edit-map", label: "Edit Map", isActive: (pathname) => pathname.startsWith("/edit-map"), userMode: false }
+];
+
+function PageFallback() {
+  return (
+    <Stack alignItems="center" justifyContent="center" spacing={1} sx={{ minHeight: "60vh" }} role="status">
+      <CircularProgress size={28} />
+      <Typography color="text.secondary">Loading...</Typography>
+    </Stack>
+  );
+}
 
 export default function App() {
   const location = useLocation();
   const [isNavExpanded, setIsNavExpanded] = useState(false);
   const [isUserMode, setIsUserMode] = useState(true);
 
-  const isViewer = location.pathname === "/viewer" || location.pathname === "/";
-  const isCrawler = location.pathname.startsWith("/crawler");
-  const isOsmMap = location.pathname === "/osm-map";
-  const isMapEditor = location.pathname.startsWith("/map-editor");
-  const shouldCollapseNav = location.pathname === "/map-editor" || location.pathname === "/osm-map";
-  const showOnlyViewerAndOsmMap = isUserMode;
+  const shouldCollapseNav = location.pathname === "/map-editor" || location.pathname === "/osm-map" || location.pathname === "/edit-map";
+  const visibleNavItems = NAV_ITEMS.filter((item) => item.userMode || !isUserMode);
 
   useEffect(() => {
     if (!shouldCollapseNav) {
@@ -44,44 +62,17 @@ export default function App() {
             Circle Toolkit
           </Typography>
           <Stack direction="row" spacing={1} sx={{ flex: 1, alignItems: "center" }}>
-            <Button
-              component={RouterLink}
-              to="/viewer"
-              variant={isViewer ? "contained" : "text"}
-              color="primary"
-            >
-              Viewer
-            </Button>
-            {!showOnlyViewerAndOsmMap ? (
-              <>
-                <Button
-                  component={RouterLink}
-                  to="/crawler"
-                  variant={isCrawler ? "contained" : "text"}
-                  color="primary"
-                >
-                  Crawl Runner
-                </Button>
-              </>
-            ) : null}
-            <Button
-              component={RouterLink}
-              to="/osm-map"
-              variant={isOsmMap ? "contained" : "text"}
-              color="primary"
-            >
-              OSM Map
-            </Button>
-            {!showOnlyViewerAndOsmMap ? (
+            {visibleNavItems.map((item) => (
               <Button
+                key={item.path}
                 component={RouterLink}
-                to="/map-editor"
-                variant={isMapEditor ? "contained" : "text"}
+                to={item.path}
+                variant={item.isActive(location.pathname) ? "contained" : "text"}
                 color="primary"
               >
-                Map Editor
+                {item.label}
               </Button>
-            ) : null}
+            ))}
             <Box sx={{ flex: 1 }} />
             <FormControlLabel
               control={<Switch size="small" checked={isUserMode} onChange={(event) => setIsUserMode(event.target.checked)} />}
@@ -104,13 +95,16 @@ export default function App() {
       ) : null}
       {renderNavigation()}
 
-      <Routes>
-        <Route path="/" element={<Navigate to="/viewer" replace />} />
-        <Route path="/viewer" element={<CirclesViewerPage />} />
-        <Route path="/crawler" element={<CrawlRunnerPage />} />
-        <Route path="/osm-map" element={<OsmMapPage isUserMode={isUserMode} onUserModeChange={setIsUserMode} />} />
-        <Route path="/map-editor" element={<MapEditorPage />} />
-      </Routes>
+      <Suspense fallback={<PageFallback />}>
+        <Routes>
+          <Route path="/" element={<Navigate to="/viewer" replace />} />
+          <Route path="/viewer" element={<CirclesViewerPage />} />
+          <Route path="/crawler" element={<CrawlRunnerPage />} />
+          <Route path="/osm-map" element={<OsmMapPage isUserMode={true} enableEditTools={false} />} />
+          <Route path="/map-editor" element={<MapEditorPage />} />
+          <Route path="/edit-map" element={<OsmMapPage isUserMode={isUserMode} enableEditTools={!isUserMode} />} />
+        </Routes>
+      </Suspense>
     </Box>
   );
 }
