@@ -56,14 +56,13 @@ Thumbs.db
 
 # -----------------------------
 # Runtime generated project data
-# Keep source-like map/osm assets trackable.
+# Ignore all storage outputs except tracked map assets and one OSM file.
 # -----------------------------
-storage/images/
-storage/map_extracted/debug/
-storage/map_extracted/rendered/
-storage/map_extracted/edits/
-storage/maps/images/
-storage/maps/*.json
+storage/**
+!storage/map/
+!storage/map/**
+!storage/osm/
+!storage/osm/8__.osm
 
 # -----------------------------
 # Temporary and cache files
