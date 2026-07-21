@@ -5,6 +5,7 @@ import { CirclesTable } from "../components/CirclesTable";
 import { SearchControls } from "../components/SearchControls";
 import { ViewerHero } from "../components/ViewerHero";
 import { mockCircles } from "../data/mockCircles";
+import { withApiBaseUrl } from "../utils/apiBase.js";
 import {
   colorPreferenceItemsToState,
   DEFAULT_COLOR_ALIASES,
@@ -21,10 +22,10 @@ import {
   statsFromRows
 } from "../utils/viewerUtils";
 
-const API_URL = import.meta.env.VITE_CIRCLES_API_URL || "/api/favorite-circles";
+const API_URL = withApiBaseUrl("/api/favorite-circles");
 const IMAGE_BASE_URL = import.meta.env.VITE_IMAGE_BASE_URL || "";
 const API_PAGE_SIZE = Number(import.meta.env.VITE_CIRCLES_API_PAGE_SIZE || 200);
-const COLOR_PREFERENCES_API_URL = import.meta.env.VITE_COLOR_PREFERENCES_API_URL || "/api/color-preferences";
+const COLOR_PREFERENCES_API_URL = withApiBaseUrl("/api/color-preferences");
 const DEFAULT_DAY_FILTERS = LOCATION_DAY_FILTER_OPTIONS.filter((item) => item.value !== "all").map((item) => item.value);
 const DEFAULT_VENUE_FILTERS = LOCATION_VENUE_FILTER_OPTIONS.filter((item) => item.value !== "all").map((item) => item.value);
 

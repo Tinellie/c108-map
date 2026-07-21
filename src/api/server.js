@@ -27,6 +27,15 @@ import {
   getCurrentCrawlJob,
   startCrawlJob
 } from "../services/crawlJobService.js";
+import {
+  createSessionForUser,
+  ensureBootstrapUser,
+  findActiveUserByUsername,
+  purgeExpiredSessions,
+  resolveUserBySessionToken,
+  revokeSessionByToken,
+  verifyPassword
+} from "../services/authService.js";
 import { formatDurationMs, logError, logInfo, logStep, logSubStep, logSuccess, logWarn } from "../utils/logger.js";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -56,39 +65,92 @@ function parseImagePaths(rawValue) {
   return [];
 }
 
-function getPublicBaseUrl(req) {
-  const forwardedProto = String(req.headers["x-forwarded-proto"] || "").split(",")[0].trim();
-  const proto = forwardedProto || req.protocol || "http";
-  const host = req.get("host") || `${config.api.host}:${config.api.port}`;
-  return `${proto}://${host}`;
+function getPublicBaseUrl() {
+  return String(config.api.publicBaseUrl || "").trim().replace(/\/$/, "");
 }
 
-function toPublicImageUrls(req, imagePaths) {
-  const baseUrl = getPublicBaseUrl(req).replace(/\/$/, "");
+function toPublicImageUrls(imagePaths) {
+  const baseUrl = getPublicBaseUrl();
   return imagePaths.map((imagePath) => {
     const normalizedPath = String(imagePath || "").replace(/^\//, "");
+    if (!baseUrl) {
+      return `/${normalizedPath}`;
+    }
+
     return `${baseUrl}/${normalizedPath}`;
   });
 }
 
-function normalizeCircle(req, row) {
+function normalizeCircle(row) {
   const localImagePaths = parseImagePaths(row.local_image_paths_json);
   return {
     ...row,
     local_image_paths: localImagePaths,
-    local_image_urls: toPublicImageUrls(req, localImagePaths)
+    local_image_urls: toPublicImageUrls(localImagePaths)
   };
 }
 
 function parseCorsOrigin(rawValue) {
-  if (!rawValue || rawValue === "*") {
-    return "*";
+  if (!rawValue) {
+    return [];
+  }
+
+  if (rawValue === "*") {
+    return ["http://localhost:5173", "http://127.0.0.1:5173"];
   }
 
   return rawValue
     .split(",")
     .map((item) => item.trim())
     .filter(Boolean);
+}
+
+function parseCookieHeader(rawCookieHeader) {
+  const header = String(rawCookieHeader || "");
+  if (!header) {
+    return {};
+  }
+
+  return Object.fromEntries(
+    header
+      .split(";")
+      .map((part) => part.trim())
+      .filter(Boolean)
+      .map((part) => {
+        const separatorIndex = part.indexOf("=");
+        if (separatorIndex === -1) {
+          return [part, ""];
+        }
+        const key = part.slice(0, separatorIndex).trim();
+        const value = decodeURIComponent(part.slice(separatorIndex + 1).trim());
+        return [key, value];
+      })
+  );
+}
+
+function getSessionTokenFromRequest(req) {
+  const cookies = parseCookieHeader(req.headers.cookie || "");
+  return String(cookies[config.auth.sessionCookieName] || "").trim();
+}
+
+function getAuthCookieOptions() {
+  return {
+    httpOnly: true,
+    sameSite: "lax",
+    secure: Boolean(config.auth.cookieSecure),
+    path: "/"
+  };
+}
+
+function setAuthCookie(res, token, expiresAt) {
+  res.cookie(config.auth.sessionCookieName, token, {
+    ...getAuthCookieOptions(),
+    expires: expiresAt
+  });
+}
+
+function clearAuthCookie(res) {
+  res.clearCookie(config.auth.sessionCookieName, getAuthCookieOptions());
 }
 
 function getRuntimeMapExtractionConfig() {
@@ -204,14 +266,17 @@ async function queryFavoriteCircles(req, { q, limit, offset }) {
   );
 
   return {
-    rows: rows.map((row) => normalizeCircle(req, row)),
+    rows: rows.map((row) => normalizeCircle(row)),
     total: Number(countRows[0]?.total || 0)
   };
 }
 
-app.use(cors({ origin: parseCorsOrigin(config.api.corsOrigin) }));
+app.use(cors({
+  origin: parseCorsOrigin(config.api.corsOrigin),
+  credentials: true
+}));
 app.use(express.json({ limit: "100mb" }));
-app.use("/storage", express.static(path.join(projectRoot, "storage")));
+app.use("/storage/images", express.static(path.join(projectRoot, "storage", "images")));
 
 app.use((req, res, next) => {
   if (!req.path.startsWith("/api")) {
@@ -232,6 +297,103 @@ app.use((req, res, next) => {
   });
 
   next();
+});
+
+app.post("/api/auth/login", async (req, res) => {
+  try {
+    const username = String(req.body?.username || "").trim();
+    const password = String(req.body?.password || "");
+    if (!username || !password) {
+      return res.status(400).json({ message: "username and password are required" });
+    }
+
+    const user = await findActiveUserByUsername(username);
+    if (!user) {
+      return res.status(401).json({ message: "invalid credentials" });
+    }
+
+    const matched = await verifyPassword(password, user.password_hash);
+    if (!matched) {
+      return res.status(401).json({ message: "invalid credentials" });
+    }
+
+    const session = await createSessionForUser(user.id, {
+      ttlHours: config.auth.sessionTtlHours,
+      userAgent: req.headers["user-agent"],
+      ipAddress: req.ip
+    });
+
+    setAuthCookie(res, session.token, session.expiresAt);
+    res.json({
+      data: {
+        user: {
+          id: Number(user.id),
+          username: String(user.username || ""),
+          role: String(user.role || "user")
+        }
+      }
+    });
+  } catch (error) {
+    logError("Login failed", error);
+    res.status(500).json({ message: "internal server error" });
+  }
+});
+
+app.get("/api/auth/me", async (req, res) => {
+  try {
+    const token = getSessionTokenFromRequest(req);
+    const user = await resolveUserBySessionToken(token);
+    if (!user) {
+      clearAuthCookie(res);
+      return res.status(401).json({ message: "unauthorized" });
+    }
+
+    res.json({ data: { user } });
+  } catch (error) {
+    logError("Read current auth user failed", error);
+    res.status(500).json({ message: "internal server error" });
+  }
+});
+
+app.post("/api/auth/logout", async (req, res) => {
+  try {
+    const token = getSessionTokenFromRequest(req);
+    await revokeSessionByToken(token);
+    clearAuthCookie(res);
+    res.status(204).send();
+  } catch (error) {
+    logError("Logout failed", error);
+    res.status(500).json({ message: "internal server error" });
+  }
+});
+
+app.use(async (req, res, next) => {
+  if (!req.path.startsWith("/api")) {
+    return next();
+  }
+
+  if (req.method === "OPTIONS") {
+    return next();
+  }
+
+  if (req.path.startsWith("/api/auth/")) {
+    return next();
+  }
+
+  try {
+    const token = getSessionTokenFromRequest(req);
+    const user = await resolveUserBySessionToken(token);
+    if (!user) {
+      clearAuthCookie(res);
+      return res.status(401).json({ message: "unauthorized" });
+    }
+
+    req.authUser = user;
+    next();
+  } catch (error) {
+    logError("Auth middleware failed", error);
+    res.status(500).json({ message: "internal server error" });
+  }
 });
 
 app.get("/api/health", async (_req, res) => {
@@ -633,7 +795,7 @@ app.get("/api/favorite-circles/:circleId", async (req, res) => {
       return res.status(404).json({ message: "circle not found" });
     }
 
-    res.json({ data: normalizeCircle(req, rows[0]) });
+    res.json({ data: normalizeCircle(rows[0]) });
   } catch (error) {
     logError("Get favorite circle failed", error);
     res.status(500).json({ message: "internal server error" });
@@ -662,7 +824,7 @@ app.get("/api/favorite-circles/:circleId/images", async (req, res) => {
     }
 
     const localImagePaths = parseImagePaths(rows[0].local_image_paths_json);
-    const imageUrls = toPublicImageUrls(req, localImagePaths);
+    const imageUrls = toPublicImageUrls(localImagePaths);
 
     res.json({
       data: {
@@ -680,6 +842,11 @@ app.get("/api/favorite-circles/:circleId/images", async (req, res) => {
 async function start() {
   logStep("Ensuring schema for API");
   await ensureSchema();
+  await ensureBootstrapUser({
+    username: config.auth.bootstrapUsername,
+    password: config.auth.bootstrapPassword
+  });
+  await purgeExpiredSessions();
   await testConnection();
 
   app.listen(config.api.port, config.api.host, () => {

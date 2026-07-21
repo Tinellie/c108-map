@@ -4,12 +4,13 @@ import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import railwayRHtml from "../statics/railway-r.html?raw";
 import railwayUHtml from "../statics/railway-u.html?raw";
 import { badgeColor, COLOR_LABELS, fetchAllCirclesFromApi, getDayCategory, normalizeCircle, parseLocation } from "../utils/viewerUtils";
+import { withApiBaseUrl } from "../utils/apiBase.js";
 import { CircleDetailDrawer } from "../components/CircleDetailDrawer";
 
-const OSM_FILE_API = import.meta.env.VITE_OSM_FILE_API_URL || "http://127.0.0.1:3000/api/osm/file";
-const MAP_EDITOR_SNAPSHOTS_API = import.meta.env.VITE_MAP_EDITOR_SNAPSHOTS_API_URL || "http://127.0.0.1:3000/api/map/editor-snapshots";
-const FAVORITE_CIRCLES_API = import.meta.env.VITE_FAVORITE_CIRCLES_API_URL || "http://127.0.0.1:3000/api/favorite-circles";
-const STORAGE_BASE_URL = import.meta.env.VITE_STORAGE_BASE_URL || "http://127.0.0.1:3000";
+const OSM_FILE_API = withApiBaseUrl("/api/osm/file");
+const MAP_EDITOR_SNAPSHOTS_API = withApiBaseUrl("/api/map/editor-snapshots");
+const FAVORITE_CIRCLES_API = withApiBaseUrl("/api/favorite-circles");
+const STORAGE_BASE_URL = import.meta.env.VITE_STORAGE_BASE_URL || withApiBaseUrl("");
 const EDITOR_OVERLAY_STORAGE_KEY = "osm-map-editor-overlay-transforms";
 const LOCKED_OSM_FILE = "8__.osm";
 const GRID_WORLD_STEP = 100;

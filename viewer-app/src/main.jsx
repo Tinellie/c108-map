@@ -5,6 +5,20 @@ import { BrowserRouter } from "react-router-dom";
 import "./index.css";
 import App from "./App.jsx";
 
+const nativeFetch = window.fetch.bind(window);
+window.fetch = async (input, init = {}) => {
+  const response = await nativeFetch(input, {
+    ...init,
+    credentials: init.credentials ?? "include"
+  });
+
+  if (response.status === 401 && window.location.pathname !== "/login") {
+    window.location.assign("/login");
+  }
+
+  return response;
+};
+
 const theme = createTheme({
   palette: {
     mode: "light",

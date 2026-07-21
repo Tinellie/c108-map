@@ -67,6 +67,38 @@ async function ensureIndex(tableName, indexName, indexDefinitionSql) {
 
 export async function ensureSchema() {
   await pool.query(`
+    CREATE TABLE IF NOT EXISTS app_users (
+      id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+      username VARCHAR(64) NOT NULL,
+      password_hash VARCHAR(255) NOT NULL,
+      role VARCHAR(32) NOT NULL DEFAULT 'admin',
+      is_active TINYINT(1) NOT NULL DEFAULT 1,
+      created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      PRIMARY KEY (id),
+      UNIQUE KEY uk_username (username)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+  `);
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS auth_sessions (
+      id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+      user_id BIGINT UNSIGNED NOT NULL,
+      token_hash CHAR(64) NOT NULL,
+      created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      expires_at DATETIME NOT NULL,
+      last_seen_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      user_agent VARCHAR(255) NULL,
+      ip_address VARCHAR(64) NULL,
+      PRIMARY KEY (id),
+      UNIQUE KEY uk_token_hash (token_hash),
+      KEY idx_user_id (user_id),
+      KEY idx_expires_at (expires_at),
+      CONSTRAINT fk_auth_sessions_user_id FOREIGN KEY (user_id) REFERENCES app_users(id) ON DELETE CASCADE
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+  `);
+
+  await pool.query(`
     CREATE TABLE IF NOT EXISTS color_palettes (
       color_index TINYINT UNSIGNED NOT NULL,
       bg_color VARCHAR(32) NOT NULL,

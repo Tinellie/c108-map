@@ -36,6 +36,15 @@ export const config = {
   api: {
     host: process.env.API_HOST || "127.0.0.1",
     port: Number(process.env.API_PORT || 3000),
-    corsOrigin: process.env.API_CORS_ORIGIN || "*"
+    corsOrigin: process.env.API_CORS_ORIGIN || "http://localhost:5173,http://127.0.0.1:5173",
+    publicBaseUrl: process.env.API_PUBLIC_BASE_URL || ""
+  },
+  auth: {
+    sessionCookieName: process.env.AUTH_SESSION_COOKIE_NAME || "ctk_session",
+    sessionTtlHours: Math.max(1, Number(process.env.AUTH_SESSION_TTL_HOURS || 8)),
+    sessionSecret: process.env.AUTH_SESSION_SECRET || "change-this-secret",
+    cookieSecure: process.env.AUTH_COOKIE_SECURE === "true",
+    bootstrapUsername: process.env.AUTH_BOOTSTRAP_USERNAME || "",
+    bootstrapPassword: process.env.AUTH_BOOTSTRAP_PASSWORD || ""
   }
 };

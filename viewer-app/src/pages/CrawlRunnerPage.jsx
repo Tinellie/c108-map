@@ -14,9 +14,10 @@ import {
   Stack,
   Typography
 } from "@mui/material";
+import { withApiBaseUrl } from "../utils/apiBase.js";
 
-const CRAWL_OPTIONS_API = import.meta.env.VITE_CRAWL_OPTIONS_API_URL || "/api/crawl/options";
-const CRAWL_JOBS_API = import.meta.env.VITE_CRAWL_JOBS_API_URL || "/api/crawl/jobs";
+const CRAWL_OPTIONS_API = withApiBaseUrl("/api/crawl/options");
+const CRAWL_JOBS_API = withApiBaseUrl("/api/crawl/jobs");
 
 const FALLBACK_CRAWL_MODES = [
   {

@@ -22,11 +22,12 @@ import {
   TextField,
   Typography
 } from "@mui/material";
+import { withApiBaseUrl } from "../utils/apiBase.js";
 import { MapExtractionActions } from "../components/MapExtractionActions";
 
-const MAP_EXTRACTION_API = import.meta.env.VITE_MAP_EXTRACTION_API_URL || "http://127.0.0.1:3000/api/map/extraction";
-const MAP_EDITOR_SNAPSHOTS_API = import.meta.env.VITE_MAP_EDITOR_SNAPSHOTS_API_URL || "http://127.0.0.1:3000/api/map/editor-snapshots";
-const IMAGE_BASE_URL = import.meta.env.VITE_IMAGE_BASE_URL || "";
+const MAP_EXTRACTION_API = withApiBaseUrl("/api/map/extraction");
+const MAP_EDITOR_SNAPSHOTS_API = withApiBaseUrl("/api/map/editor-snapshots");
+const IMAGE_BASE_URL = import.meta.env.VITE_IMAGE_BASE_URL || withApiBaseUrl("");
 const ALLOWED_BOOTH_SUFFIXES = ["", "a", "b", "ab"];
 const HIRAGANA_SEQUENCE = [
   "あ", "い", "う", "え", "お",

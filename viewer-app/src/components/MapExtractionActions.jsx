@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { Alert, Button, Stack } from "@mui/material";
+import { withApiBaseUrl } from "../utils/apiBase.js";
 
-const MAP_EXTRACTION_API = import.meta.env.VITE_MAP_EXTRACTION_API_URL || "http://127.0.0.1:3000/api/map/extraction";
+const MAP_EXTRACTION_API = withApiBaseUrl("/api/map/extraction");
 
 async function readJson(response) {
   const json = await response.json().catch(() => ({}));

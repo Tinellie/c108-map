@@ -9,7 +9,8 @@
     "start:dev": "node --watch src/index.js",
     "api": "node src/api/server.js",
     "api:dev": "node --watch src/api/server.js",
-    "map:extract": "python src/tools/extract_map_booths.py"
+    "map:extract": "python src/tools/extract_map_booths.py",
+    "user:create": "node src/tools/create_user.js"
   },
   "dependencies": {
     "chalk": "^5.6.0",

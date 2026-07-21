@@ -1,6 +1,7 @@
-import { lazy, Suspense, useEffect, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useState } from "react";
 import { AppBar, Box, Button, CircularProgress, FormControlLabel, Stack, Switch, Toolbar, Typography } from "@mui/material";
 import { Link as RouterLink, Navigate, Route, Routes, useLocation } from "react-router-dom";
+import { withApiBaseUrl } from "./utils/apiBase.js";
 
 function lazyNamedPage(loader, exportName) {
   return lazy(() => loader().then((module) => ({ default: module[exportName] })));
@@ -10,6 +11,10 @@ const CrawlRunnerPage = lazyNamedPage(() => import("./pages/CrawlRunnerPage"), "
 const CirclesViewerPage = lazyNamedPage(() => import("./pages/CirclesViewerPage"), "CirclesViewerPage");
 const MapEditorPage = lazyNamedPage(() => import("./pages/MapEditorPage"), "MapEditorPage");
 const OsmMapPage = lazyNamedPage(() => import("./pages/OsmMapPage"), "OsmMapPage");
+const LoginPage = lazyNamedPage(() => import("./pages/LoginPage"), "LoginPage");
+
+const AUTH_ME_API = withApiBaseUrl("/api/auth/me");
+const AUTH_LOGOUT_API = withApiBaseUrl("/api/auth/logout");
 
 const NAV_ITEMS = [
   { path: "/viewer", label: "Viewer", isActive: (pathname) => pathname === "/viewer" || pathname === "/", userMode: true },
@@ -32,6 +37,7 @@ export default function App() {
   const location = useLocation();
   const [isNavExpanded, setIsNavExpanded] = useState(false);
   const [isUserMode, setIsUserMode] = useState(true);
+  const [authState, setAuthState] = useState({ status: "checking" });
 
   const shouldCollapseNav = location.pathname === "/map-editor" || location.pathname === "/osm-map" || location.pathname === "/edit-map";
   const visibleNavItems = NAV_ITEMS.filter((item) => item.userMode || !isUserMode);
@@ -41,6 +47,49 @@ export default function App() {
       setIsNavExpanded(false);
     }
   }, [shouldCollapseNav]);
+
+  const checkCurrentUser = useCallback(async () => {
+    try {
+      const response = await fetch(AUTH_ME_API);
+      if (!response.ok) {
+        throw new Error("unauthorized");
+      }
+
+      const json = await response.json().catch(() => ({}));
+      setAuthState({
+        status: "authenticated",
+        user: json?.data?.user || null
+      });
+      return true;
+    } catch {
+      setAuthState({ status: "unauthenticated", user: null });
+      return false;
+    }
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      if (cancelled) {
+        return;
+      }
+      await checkCurrentUser();
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [checkCurrentUser]);
+
+  async function handleLogout() {
+    try {
+      await fetch(AUTH_LOGOUT_API, { method: "POST" });
+    } catch {
+      // keep client-side logout flow even if request fails
+    }
+
+    setAuthState({ status: "unauthenticated", user: null });
+  }
 
   function renderNavigation() {
     return (
@@ -79,9 +128,25 @@ export default function App() {
               label="用户模式"
               sx={{ m: 0, ml: "auto", flexShrink: 0, whiteSpace: "nowrap" }}
             />
+            <Button size="small" color="inherit" onClick={handleLogout}>Logout</Button>
           </Stack>
         </Toolbar>
       </AppBar>
+    );
+  }
+
+  if (authState.status === "checking") {
+    return <PageFallback />;
+  }
+
+  if (authState.status !== "authenticated") {
+    return (
+      <Suspense fallback={<PageFallback />}>
+        <Routes>
+          <Route path="/login" element={<LoginPage onLoginSuccess={checkCurrentUser} />} />
+          <Route path="*" element={<Navigate to="/login" replace />} />
+        </Routes>
+      </Suspense>
     );
   }
 
@@ -98,6 +163,7 @@ export default function App() {
       <Suspense fallback={<PageFallback />}>
         <Routes>
           <Route path="/" element={<Navigate to="/viewer" replace />} />
+          <Route path="/login" element={<Navigate to="/viewer" replace />} />
           <Route path="/viewer" element={<CirclesViewerPage />} />
           <Route path="/crawler" element={<CrawlRunnerPage />} />
           <Route path="/osm-map" element={<OsmMapPage isUserMode={true} enableEditTools={false} />} />
