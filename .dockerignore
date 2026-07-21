@@ -1,0 +1,9 @@
+.git
+.gitignore
+.vscode
+.venv
+node_modules
+viewer-app/node_modules
+storage/**
+*.log
+npm-debug.log*
