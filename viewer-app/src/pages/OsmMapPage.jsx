@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Accordion, AccordionDetails, AccordionSummary, Box, Button, Checkbox, FormControl, FormControlLabel, InputLabel, List, ListItem, ListItemIcon, ListItemText, MenuItem, Paper, Select, Slider, Stack, TextField, Typography } from "@mui/material";
+import { Accordion, AccordionDetails, AccordionSummary, Box, Button, Checkbox, Collapse, FormControl, FormControlLabel, InputLabel, List, ListItem, ListItemIcon, ListItemText, MenuItem, Paper, Select, Slider, Stack, TextField, Typography } from "@mui/material";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import railwayRHtml from "../statics/railway-r.html?raw";
 import railwayUHtml from "../statics/railway-u.html?raw";
