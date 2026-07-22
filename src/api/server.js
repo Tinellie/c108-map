@@ -619,7 +619,7 @@ app.get("/api/map/editor-snapshots", requireAdmin, async (req, res) => {
   }
 });
 
-app.get("/api/map/pages", requireAdmin, async (_req, res) => {
+app.get("/api/map/pages", async (_req, res) => {
   try {
     const meta = await readTransferredMapMeta();
     res.json({
@@ -638,7 +638,7 @@ app.get("/api/map/pages", requireAdmin, async (_req, res) => {
   }
 });
 
-app.get("/api/map/pages/:page", requireAdmin, async (req, res) => {
+app.get("/api/map/pages/:page", async (req, res) => {
   try {
     const page = Math.max(1, Math.round(Number(req.params.page || 0)));
     if (!page) {
