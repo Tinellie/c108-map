@@ -63,6 +63,10 @@ storage/**
 !storage/map/**
 !storage/osm/
 !storage/osm/8__.osm
+!storage/images/
+storage/images/**
+!storage/images/icons/
+!storage/images/icons/**
 
 # -----------------------------
 # Temporary and cache files
