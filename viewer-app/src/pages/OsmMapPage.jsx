@@ -1719,6 +1719,8 @@ export function OsmMapPage({ isUserMode = true, enableEditTools = true }) {
   const boothLabelOffsetFrameRef = useRef(0);
   const pendingBoothLabelOffsetsRef = useRef({});
   const dragStateRef = useRef({ type: "none", pointerId: null, lastX: 0, lastY: 0 });
+  const touchPointersRef = useRef(new Map());
+  const pinchStateRef = useRef({ active: false, lastDistance: 0 });
   const renderedBoothLabelsRef = useRef([]);
   const editorBoothLabelOffsetsRef = useRef({});
   const uiPreferencesHydratedRef = useRef(false);
@@ -1753,6 +1755,7 @@ export function OsmMapPage({ isUserMode = true, enableEditTools = true }) {
   const [selectedEditorEntityId, setSelectedEditorEntityId] = useState("");
   const [mapRotationDeg, setMapRotationDeg] = useState(34);
   const [useGyroRotation, setUseGyroRotation] = useState(false);
+  const [isRightPanelCollapsed, setIsRightPanelCollapsed] = useState(false);
   const [viewState, setViewState] = useState({ zoom: 1, offsetX: 0, offsetY: 0 });
   const stepConnectorVisibleWayIds = useMemo(() => getStepConnectorVisibleWayIds(ways, selectedLevels), [ways, selectedLevels]);
   const selectedEditorPage = useMemo(
@@ -1886,7 +1889,7 @@ export function OsmMapPage({ isUserMode = true, enableEditTools = true }) {
         return;
       }
 
-      const nextRotation = normalizeSignedDegrees(-alpha);
+      const nextRotation = normalizeSignedDegrees(alpha);
       setMapRotationDeg(roundCoordinate(nextRotation));
     };
 
@@ -2727,15 +2730,71 @@ export function OsmMapPage({ isUserMode = true, enableEditTools = true }) {
   }
 
   function getCanvasPoint(event) {
+    return getCanvasPointFromClient(event.clientX, event.clientY);
+  }
+
+  function getCanvasPointFromClient(clientX, clientY) {
     const canvas = canvasRef.current;
     if (!canvas) {
       return null;
     }
     const rect = canvas.getBoundingClientRect();
     return {
-      x: event.clientX - rect.left,
-      y: event.clientY - rect.top
+      x: clientX - rect.left,
+      y: clientY - rect.top
     };
+  }
+
+  function getPinchGestureMetrics() {
+    const pointers = [...touchPointersRef.current.values()];
+    if (pointers.length < 2) {
+      return null;
+    }
+    const [firstPointer, secondPointer] = pointers;
+    const dx = secondPointer.x - firstPointer.x;
+    const dy = secondPointer.y - firstPointer.y;
+    const distance = Math.hypot(dx, dy);
+    if (!Number.isFinite(distance) || distance <= 0) {
+      return null;
+    }
+    return {
+      distance,
+      midpoint: {
+        x: (firstPointer.x + secondPointer.x) / 2,
+        y: (firstPointer.y + secondPointer.y) / 2
+      }
+    };
+  } 
+
+  function applyZoomAtCanvasPoint(canvasPoint, zoomFactor) {
+    if (!canvasPoint || !Number.isFinite(zoomFactor) || zoomFactor <= 0) {
+      return;
+    }
+
+    scheduleViewStateUpdate((current) => {
+      const nextZoom = clamp(current.zoom * zoomFactor, 0.03, 80);
+      if (Math.abs(nextZoom - current.zoom) < 0.000001) {
+        return current;
+      }
+      const viewportWidth = canvasRef.current?.clientWidth || 0;
+      const viewportHeight = canvasRef.current?.clientHeight || 0;
+      const rotationState = { ...current, rotationDeg: mapRotationDeg, viewportWidth, viewportHeight };
+      const worldPoint = toWorldPoint(canvasPoint, rotationState);
+      const rotationRad = (mapRotationDeg * Math.PI) / 180;
+      const cos = Math.cos(rotationRad);
+      const sin = Math.sin(rotationRad);
+      const centerX = viewportWidth > 0 ? viewportWidth / 2 : current.offsetX;
+      const centerY = viewportHeight > 0 ? viewportHeight / 2 : current.offsetY;
+      const rotatedX = canvasPoint.x - centerX;
+      const rotatedY = canvasPoint.y - centerY;
+      const localX = rotatedX * cos + rotatedY * sin;
+      const localY = -rotatedX * sin + rotatedY * cos;
+      return {
+        zoom: nextZoom,
+        offsetX: localX - worldPoint.x * nextZoom + centerX,
+        offsetY: localY - worldPoint.y * nextZoom + centerY
+      };
+    });
   }
 
   function scheduleViewStateUpdate(updater) {
@@ -2832,6 +2891,21 @@ export function OsmMapPage({ isUserMode = true, enableEditTools = true }) {
   }
 
   function handlePointerDown(event) {
+    if (event.pointerType !== "mouse") {
+      touchPointersRef.current.set(event.pointerId, { x: event.clientX, y: event.clientY });
+      if (touchPointersRef.current.size >= 2) {
+        const pinchMetrics = getPinchGestureMetrics();
+        if (pinchMetrics) {
+          event.preventDefault();
+          pinchStateRef.current = { active: true, lastDistance: pinchMetrics.distance };
+          dragStateRef.current = { type: "none", pointerId: null, lastX: 0, lastY: 0 };
+          setIsPanning(false);
+          canvasRef.current?.setPointerCapture(event.pointerId);
+          return;
+        }
+      }
+    }
+
     const beginPanDrag = () => {
       event.preventDefault();
       dragStateRef.current = { type: "pan", pointerId: event.pointerId, lastX: event.clientX, lastY: event.clientY };
@@ -2911,6 +2985,29 @@ export function OsmMapPage({ isUserMode = true, enableEditTools = true }) {
   }
 
   function handlePointerMove(event) {
+    if (event.pointerType !== "mouse" && touchPointersRef.current.has(event.pointerId)) {
+      touchPointersRef.current.set(event.pointerId, { x: event.clientX, y: event.clientY });
+    }
+
+    if (event.pointerType !== "mouse" && (pinchStateRef.current.active || touchPointersRef.current.size >= 2)) {
+      const pinchMetrics = getPinchGestureMetrics();
+      if (pinchMetrics) {
+        event.preventDefault();
+        const previousDistance = asFiniteNumber(pinchStateRef.current.lastDistance, pinchMetrics.distance);
+        pinchStateRef.current = { active: true, lastDistance: pinchMetrics.distance };
+        if (previousDistance > 0) {
+          const zoomFactor = pinchMetrics.distance / previousDistance;
+          if (Number.isFinite(zoomFactor) && Math.abs(zoomFactor - 1) > 0.001) {
+            const anchorPoint = getCanvasPointFromClient(pinchMetrics.midpoint.x, pinchMetrics.midpoint.y);
+            applyZoomAtCanvasPoint(anchorPoint, zoomFactor);
+          }
+        }
+        dragStateRef.current = { type: "none", pointerId: null, lastX: 0, lastY: 0 };
+        setIsPanning(false);
+        return;
+      }
+    }
+
     if (dragStateRef.current.type === "booth-label" && dragStateRef.current.pointerId === event.pointerId) {
       event.preventDefault();
       const canvasPoint = getCanvasPoint(event);
@@ -2986,6 +3083,13 @@ export function OsmMapPage({ isUserMode = true, enableEditTools = true }) {
   }
 
   function endPointerPan(pointerId) {
+    if (touchPointersRef.current.has(pointerId)) {
+      touchPointersRef.current.delete(pointerId);
+    }
+    if (touchPointersRef.current.size < 2) {
+      pinchStateRef.current = { active: false, lastDistance: 0 };
+    }
+
     if (dragStateRef.current.pointerId !== pointerId) {
       return;
     }
@@ -3004,28 +3108,7 @@ export function OsmMapPage({ isUserMode = true, enableEditTools = true }) {
     if (!canvasPoint) {
       return;
     }
-
-    scheduleViewStateUpdate((current) => {
-      const nextZoom = clamp(current.zoom * Math.exp(-event.deltaY * 0.0015), 0.03, 80);
-      const viewportWidth = canvasRef.current?.clientWidth || 0;
-      const viewportHeight = canvasRef.current?.clientHeight || 0;
-      const rotationState = { ...current, rotationDeg: mapRotationDeg, viewportWidth, viewportHeight };
-      const worldPoint = toWorldPoint(canvasPoint, rotationState);
-      const rotationRad = (mapRotationDeg * Math.PI) / 180;
-      const cos = Math.cos(rotationRad);
-      const sin = Math.sin(rotationRad);
-      const centerX = viewportWidth > 0 ? viewportWidth / 2 : current.offsetX;
-      const centerY = viewportHeight > 0 ? viewportHeight / 2 : current.offsetY;
-      const rotatedX = canvasPoint.x - centerX;
-      const rotatedY = canvasPoint.y - centerY;
-      const localX = rotatedX * cos + rotatedY * sin;
-      const localY = -rotatedX * sin + rotatedY * cos;
-      return {
-        zoom: nextZoom,
-        offsetX: localX - worldPoint.x * nextZoom + centerX,
-        offsetY: localY - worldPoint.y * nextZoom + centerY
-      };
-    });
+    applyZoomAtCanvasPoint(canvasPoint, Math.exp(-event.deltaY * 0.0015));
   }
 
   async function handleGyroRotationToggle(checked) {
@@ -3059,157 +3142,181 @@ export function OsmMapPage({ isUserMode = true, enableEditTools = true }) {
 
   return (
     <Box sx={{ position: "relative", width: "100%", height: "100vh", overflow: "hidden", bgcolor: "#f6f4ef" }}>
-      <Stack
-        spacing={1.25}
+      <Box
         sx={{
           position: "fixed",
           top: 62,
           right: 16,
-          width: 220,
-          zIndex: (theme) => theme.zIndex.appBar
+          zIndex: (theme) => theme.zIndex.appBar,
+          display: "flex",
+          alignItems: "flex-start",
+          gap: 0.75
         }}
       >
-        <Paper
-          elevation={4}
+        <Button
+          variant="contained"
+          size="small"
+          onClick={() => setIsRightPanelCollapsed((current) => !current)}
           sx={{
-            border: "1px solid #d9d4c6",
-            bgcolor: "rgba(255, 255, 255, 0.9)",
-            backdropFilter: "blur(3px)",
-            overflow: "hidden"
+            minWidth: 30,
+            width: 30,
+            height: 96,
+            px: 0.2,
+            py: 0.5,
+            borderRadius: 1,
+            bgcolor: "#2b2f34",
+            color: "#fefcf7",
+            writingMode: "vertical-rl",
+            textOrientation: "mixed",
+            letterSpacing: 1,
+            "&:hover": { bgcolor: "#1f2327" }
           }}
         >
-          <Stack spacing={1} sx={{ p: 1.25 }}>
-            <FormControl size="small" fullWidth>
-              <InputLabel id="circle-day-select-label">日期</InputLabel>
-              <Select
-                labelId="circle-day-select-label"
-                label="日期"
-                value={selectedCircleDay}
-                onChange={(event) => setSelectedCircleDay(String(event.target.value))}
+          {isRightPanelCollapsed ? "展开面板" : "收起面板"}
+        </Button>
+        {!isRightPanelCollapsed ? <Stack spacing={1.25} sx={{ width: 220 }}>
+          <Paper
+            elevation={4}
+            sx={{
+              border: "1px solid #d9d4c6",
+              bgcolor: "rgba(255, 255, 255, 0.9)",
+              backdropFilter: "blur(3px)",
+              overflow: "hidden"
+            }}
+          >
+            <Stack spacing={1} sx={{ p: 1.25 }}>
+              <FormControl size="small" fullWidth>
+                <InputLabel id="circle-day-select-label">日期</InputLabel>
+                <Select
+                  labelId="circle-day-select-label"
+                  label="日期"
+                  value={selectedCircleDay}
+                  onChange={(event) => setSelectedCircleDay(String(event.target.value))}
+                >
+                  <MenuItem value="day1">一日目(土)</MenuItem>
+                  <MenuItem value="day2">二日目(日)</MenuItem>
+                </Select>
+              </FormControl>
+              <Accordion
+                disableGutters
+                elevation={0}
+                expanded={isColorFilterPanelOpen}
+                onChange={(_, expanded) => setIsColorFilterPanelOpen(expanded)}
+                sx={{ bgcolor: "transparent", "&::before": { display: "none" } }}
               >
-                <MenuItem value="day1">一日目(土)</MenuItem>
-                <MenuItem value="day2">二日目(日)</MenuItem>
-              </Select>
-            </FormControl>
-            <Accordion
-              disableGutters
-              elevation={0}
-              expanded={isColorFilterPanelOpen}
-              onChange={(_, expanded) => setIsColorFilterPanelOpen(expanded)}
-              sx={{ bgcolor: "transparent", "&::before": { display: "none" } }}
-            >
-              <AccordionSummary expandIcon={<ExpandMoreIcon />} sx={{ minHeight: 36, px: 0.25, "& .MuiAccordionSummary-content": { my: 0 } }}>
-                <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>颜色筛选</Typography>
-              </AccordionSummary>
-              <AccordionDetails sx={{ px: 0, py: 0 }}>
-                <List dense disablePadding>
-                {COLOR_INDEX_OPTIONS.map((colorIndex) => {
-                  const checked = selectedLabelColorIndexes.includes(colorIndex);
-                  return (
+                <AccordionSummary expandIcon={<ExpandMoreIcon />} sx={{ minHeight: 36, px: 0.25, "& .MuiAccordionSummary-content": { my: 0 } }}>
+                  <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>颜色筛选</Typography>
+                </AccordionSummary>
+                <AccordionDetails sx={{ px: 0, py: 0 }}>
+                  <List dense disablePadding>
+                  {COLOR_INDEX_OPTIONS.map((colorIndex) => {
+                    const checked = selectedLabelColorIndexes.includes(colorIndex);
+                    return (
+                      <ListItem
+                        key={colorIndex}
+                        disableGutters
+                        dense
+                        secondaryAction={<Checkbox edge="end" size="small" checked={checked} disabled onChange={() => toggleLabelColorIndex(colorIndex)} />}
+                        sx={{ py: 0, pr: 0 }}
+                      >
+                        <ListItemIcon sx={{ minWidth: 22 }}>
+                          <Box sx={{ width: 9, height: 9, borderRadius: "50%", bgcolor: badgeColor(colorIndex), border: "1px solid rgba(0,0,0,0.14)" }} />
+                        </ListItemIcon>
+                        <ListItemText primary={COLOR_LABELS[colorIndex]} primaryTypographyProps={{ fontSize: 12, lineHeight: 1.2 }} />
+                      </ListItem>
+                    );
+                  })}
+                  </List>
+                </AccordionDetails>
+              </Accordion>
+              <Accordion
+                disableGutters
+                elevation={0}
+                expanded={isLevelPanelOpen}
+                onChange={(_, expanded) => setIsLevelPanelOpen(expanded)}
+                sx={{ bgcolor: "transparent", "&::before": { display: "none" } }}
+              >
+                <AccordionSummary expandIcon={<ExpandMoreIcon />} sx={{ minHeight: 36, px: 0.25, "& .MuiAccordionSummary-content": { my: 0 } }}>
+                  <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>层级</Typography>
+                </AccordionSummary>
+                <AccordionDetails sx={{ px: 0, py: 0 }}>
+                  <List dense disablePadding>
+                  {[1, 2, 3, 4].map((level) => (
                     <ListItem
-                      key={colorIndex}
+                      key={level}
                       disableGutters
                       dense
-                      secondaryAction={<Checkbox edge="end" size="small" checked={checked} disabled onChange={() => toggleLabelColorIndex(colorIndex)} />}
+                      secondaryAction={<Checkbox edge="end" size="small" checked={selectedLevels.includes(level)} disabled />}
                       sx={{ py: 0, pr: 0 }}
                     >
-                      <ListItemIcon sx={{ minWidth: 22 }}>
-                        <Box sx={{ width: 9, height: 9, borderRadius: "50%", bgcolor: badgeColor(colorIndex), border: "1px solid rgba(0,0,0,0.14)" }} />
-                      </ListItemIcon>
-                      <ListItemText primary={COLOR_LABELS[colorIndex]} primaryTypographyProps={{ fontSize: 12, lineHeight: 1.2 }} />
+                      <ListItemText primary={`L${level}`} primaryTypographyProps={{ fontSize: 12, lineHeight: 1.2 }} />
                     </ListItem>
-                  );
-                })}
-                </List>
-              </AccordionDetails>
-            </Accordion>
-            <Accordion
-              disableGutters
-              elevation={0}
-              expanded={isLevelPanelOpen}
-              onChange={(_, expanded) => setIsLevelPanelOpen(expanded)}
-              sx={{ bgcolor: "transparent", "&::before": { display: "none" } }}
-            >
-              <AccordionSummary expandIcon={<ExpandMoreIcon />} sx={{ minHeight: 36, px: 0.25, "& .MuiAccordionSummary-content": { my: 0 } }}>
-                <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>层级</Typography>
-              </AccordionSummary>
-              <AccordionDetails sx={{ px: 0, py: 0 }}>
-                <List dense disablePadding>
-                {[1, 2, 3, 4].map((level) => (
-                  <ListItem
-                    key={level}
-                    disableGutters
-                    dense
-                    secondaryAction={<Checkbox edge="end" size="small" checked={selectedLevels.includes(level)} disabled />}
-                    sx={{ py: 0, pr: 0 }}
-                  >
-                    <ListItemText primary={`L${level}`} primaryTypographyProps={{ fontSize: 12, lineHeight: 1.2 }} />
-                  </ListItem>
-                ))}
-                </List>
-              </AccordionDetails>
-            </Accordion>
-            <Stack spacing={0.5}>
-              <Typography variant="body2" sx={{ fontWeight: 600 }}>地图旋转</Typography>
-              <Slider
-                value={mapRotationDeg}
-                min={-180}
-                max={180}
-                step={1}
-                valueLabelDisplay="auto"
-                valueLabelFormat={(value) => `${value}°`}
-                onChange={(_, nextValue) => {
-                  const nextRotation = Array.isArray(nextValue) ? nextValue[0] : nextValue;
-                  if (Number.isFinite(nextRotation)) {
-                    setMapRotationDeg(roundCoordinate(clamp(nextRotation, -180, 180)));
-                  }
-                }}
-              />
-              <FormControlLabel
-                control={(
-                  <Checkbox
-                    size="small"
-                    checked={useGyroRotation}
-                    onChange={(event) => {
-                      void handleGyroRotationToggle(event.target.checked);
-                    }}
-                    disabled={!gyroSupported}
-                  />
-                )}
-                label="陀螺仪旋转"
-                sx={{ m: 0, "& .MuiFormControlLabel-label": { fontSize: 12 } }}
-              />
+                  ))}
+                  </List>
+                </AccordionDetails>
+              </Accordion>
+              <Stack spacing={0.5}>
+                <Typography variant="body2" sx={{ fontWeight: 600 }}>地图旋转</Typography>
+                <Slider
+                  value={mapRotationDeg}
+                  min={-180}
+                  max={180}
+                  step={1}
+                  valueLabelDisplay="auto"
+                  valueLabelFormat={(value) => `${value}°`}
+                  onChange={(_, nextValue) => {
+                    const nextRotation = Array.isArray(nextValue) ? nextValue[0] : nextValue;
+                    if (Number.isFinite(nextRotation)) {
+                      setMapRotationDeg(roundCoordinate(clamp(nextRotation, -180, 180)));
+                    }
+                  }}
+                />
+                <FormControlLabel
+                  control={(
+                    <Checkbox
+                      size="small"
+                      checked={useGyroRotation}
+                      onChange={(event) => {
+                        void handleGyroRotationToggle(event.target.checked);
+                      }}
+                      disabled={!gyroSupported}
+                    />
+                  )}
+                  label="陀螺仪旋转"
+                  sx={{ m: 0, "& .MuiFormControlLabel-label": { fontSize: 12 } }}
+                />
+              </Stack>
             </Stack>
-          </Stack>
-        </Paper>
+          </Paper>
 
-        <Paper
-          elevation={4}
-          sx={{
-            border: "1px solid #d9d4c6",
-            bgcolor: "rgba(255, 255, 255, 0.9)",
-            backdropFilter: "blur(3px)"
-          }}
-        >
-          <Stack spacing={1} sx={{ p: 1.25 }}>
-            <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>路径高亮</Typography>
-            <FormControl size="small" fullWidth>
-              <InputLabel id="path-highlight-select-label">高亮类型</InputLabel>
-              <Select
-                labelId="path-highlight-select-label"
-                label="高亮类型"
-                value={selectedPathHighlightIds[0] || ""}
-                onChange={(event) => selectPathHighlight(event.target.value)}
-              >
-                <MenuItem value="">无</MenuItem>
-                {PATH_HIGHLIGHT_OPTIONS.map((option) => (
-                  <MenuItem key={option.id} value={option.id}>{option.label}</MenuItem>
-                ))}
-              </Select>
-            </FormControl>
-          </Stack>
-        </Paper>
-      </Stack>
+          <Paper
+            elevation={4}
+            sx={{
+              border: "1px solid #d9d4c6",
+              bgcolor: "rgba(255, 255, 255, 0.9)",
+              backdropFilter: "blur(3px)"
+            }}
+          >
+            <Stack spacing={1} sx={{ p: 1.25 }}>
+              <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>路径高亮</Typography>
+              <FormControl size="small" fullWidth>
+                <InputLabel id="path-highlight-select-label">高亮类型</InputLabel>
+                <Select
+                  labelId="path-highlight-select-label"
+                  label="高亮类型"
+                  value={selectedPathHighlightIds[0] || ""}
+                  onChange={(event) => selectPathHighlight(event.target.value)}
+                >
+                  <MenuItem value="">无</MenuItem>
+                  {PATH_HIGHLIGHT_OPTIONS.map((option) => (
+                    <MenuItem key={option.id} value={option.id}>{option.label}</MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+            </Stack>
+          </Paper>
+        </Stack> : null}
+      </Box>
       {enableEditTools && !isUserMode ? <Box
         sx={{
           position: "fixed",
