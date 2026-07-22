@@ -9,6 +9,7 @@ import { CircleDetailDrawer } from "../components/CircleDetailDrawer";
 
 const OSM_FILE_API = withApiBaseUrl("/api/osm/file");
 const MAP_EDITOR_SNAPSHOTS_API = withApiBaseUrl("/api/map/editor-snapshots");
+const MAP_PAGES_API = withApiBaseUrl("/api/map/pages");
 const FAVORITE_CIRCLES_API = withApiBaseUrl("/api/favorite-circles");
 const STORAGE_BASE_URL = import.meta.env.VITE_STORAGE_BASE_URL || withApiBaseUrl("");
 const EDITOR_OVERLAY_STORAGE_KEY = "osm-map-editor-overlay-transforms";
@@ -2106,14 +2107,33 @@ export function OsmMapPage({ isUserMode = true, enableEditTools = true }) {
   useEffect(() => {
     let isMounted = true;
 
-    async function loadLatestEditorSnapshot() {
+    async function loadEditorPagesFromMap() {
       try {
-        const response = await fetch(`${MAP_EDITOR_SNAPSHOTS_API}/latest`);
-        const json = await readJson(response);
+        const pagesResponse = await fetch(MAP_PAGES_API);
+        const pagesJson = await readJson(pagesResponse);
+        const pageItems = Array.isArray(pagesJson.data) ? pagesJson.data : [];
+
+        const pagePayloads = await Promise.all(
+          pageItems.map(async (item) => {
+            const pageNo = Number(item?.page || 0);
+            if (!Number.isFinite(pageNo) || pageNo <= 0) {
+              return null;
+            }
+
+            const response = await fetch(`${MAP_PAGES_API}/${pageNo}`);
+            const json = await readJson(response);
+            return json?.data || null;
+          })
+        );
+
         const savedTransforms = await readSavedEditorOverlayTransformsFromApi() || readSavedEditorOverlayTransforms();
-        const pages = Array.isArray(json.data?.pages)
-          ? applySavedEditorTransforms(json.data.pages.map(normalizeEditorPage).sort((left, right) => left.page - right.page), savedTransforms)
-          : [];
+        const pages = applySavedEditorTransforms(
+          pagePayloads
+            .filter(Boolean)
+            .map(normalizeEditorPage)
+            .sort((left, right) => left.page - right.page),
+          savedTransforms
+        );
         const nextPageOverlays = Object.fromEntries(pages.map((page) => [String(page.page), normalizeEditorOverlayTransform(savedTransforms.pageOverlays?.[String(page.page)])]));
         const nextPageIslandLabelSettings = Object.fromEntries(
           pages.map((page) => [String(page.page), normalizeIslandLabelSetting(savedTransforms.pageIslandLabelSettings?.[String(page.page)])])
@@ -2152,7 +2172,7 @@ export function OsmMapPage({ isUserMode = true, enableEditTools = true }) {
         setShowEditorOverlay(false);
       }
     }
-    loadLatestEditorSnapshot();
+    loadEditorPagesFromMap();
     return () => {
       isMounted = false;
     };
