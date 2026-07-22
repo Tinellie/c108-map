@@ -2,8 +2,6 @@ import puppeteer from "puppeteer";
 import { config } from "../config/env.js";
 import { logInfo, logStep, logWarn } from "../utils/logger.js";
 
-const LOGIN_OUTCOME_CHECK_DELAY_MS = 2500;
-
 function trimText(value) {
   return (value || "").replace(/\s+/g, " ").trim();
 }
@@ -116,9 +114,6 @@ async function submitLoginForm(page, loginWait, loginCredentials) {
   await Promise.allSettled([
     page.waitForNavigation({ waitUntil: "networkidle2", timeout: 15000 })
   ]);
-
-  // Some login pages update error/success state asynchronously after submit.
-  await page.waitForTimeout(LOGIN_OUTCOME_CHECK_DELAY_MS);
 
   let outcome = "";
   try {

@@ -136,17 +136,6 @@ export async function runCrawlPipeline({
   const existingCircleIds = await loadExistingCircleIdSet();
   const existingCircleIdsAtStart = new Set(existingCircleIds);
   logSuccess("Existing circle ids loaded", `count=${existingCircleIds.size}`);
-  await emitProgressWithLiveScreenshot({
-    stage: "list",
-    originalCount: existingCircleIdsAtStart.size,
-    newCount: 0,
-    totalCount: 0,
-    pagesProcessed: 0,
-    detailDone: 0,
-    detailTotal: 0,
-    detailFailed: 0,
-    message: `Original items: ${existingCircleIdsAtStart.size}`
-  });
 
   logStep("Loading color palette mapping");
   const colorPaletteMap = await loadColorPaletteMap();
@@ -195,6 +184,18 @@ export async function runCrawlPipeline({
 
     emitProgress(nextProgress);
   }
+
+  await emitProgressWithLiveScreenshot({
+    stage: "list",
+    originalCount: existingCircleIdsAtStart.size,
+    newCount: 0,
+    totalCount: 0,
+    pagesProcessed: 0,
+    detailDone: 0,
+    detailTotal: 0,
+    detailFailed: 0,
+    message: `Original items: ${existingCircleIdsAtStart.size}`
+  });
 
   try {
     ({ page } = session);
