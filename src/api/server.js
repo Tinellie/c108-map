@@ -710,7 +710,7 @@ app.get("/api/map/editor-snapshots/latest", requireAdmin, async (_req, res) => {
   }
 });
 
-app.get("/api/map/editor-snapshots/overlay-transforms", requireAdmin, async (_req, res) => {
+app.get("/api/map/editor-snapshots/overlay-transforms", async (_req, res) => {
   try {
     const filePath = getOverlayTransformsPath();
     const raw = await fs.readFile(filePath, "utf-8");
