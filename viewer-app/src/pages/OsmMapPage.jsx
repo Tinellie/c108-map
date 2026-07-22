@@ -53,6 +53,21 @@ function normalizeSignedDegrees(value) {
   return normalized > 180 ? normalized - 360 : normalized;
 }
 
+function extractNorthHeadingDegrees(event) {
+  const compassHeading = Number(event?.webkitCompassHeading);
+  if (Number.isFinite(compassHeading)) {
+    return ((compassHeading % 360) + 360) % 360;
+  }
+
+  const alpha = Number(event?.alpha);
+  if (!Number.isFinite(alpha)) {
+    return null;
+  }
+
+  // Fallback: convert alpha to a north-based clockwise heading.
+  return ((360 - alpha) % 360 + 360) % 360;
+}
+
 async function readJson(response) {
   const json = await response.json().catch(() => ({}));
   if (!response.ok) {
@@ -1884,12 +1899,12 @@ export function OsmMapPage({ isUserMode = true, enableEditTools = true }) {
     }
 
     const handleDeviceOrientation = (event) => {
-      const alpha = Number(event?.alpha);
-      if (!Number.isFinite(alpha)) {
+      const headingDeg = extractNorthHeadingDegrees(event);
+      if (!Number.isFinite(headingDeg)) {
         return;
       }
 
-      const nextRotation = normalizeSignedDegrees(alpha);
+      const nextRotation = normalizeSignedDegrees(headingDeg);
       setMapRotationDeg(roundCoordinate(nextRotation));
     };
 
