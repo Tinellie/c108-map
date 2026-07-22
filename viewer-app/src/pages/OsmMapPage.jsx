@@ -60,12 +60,11 @@ function extractNorthHeadingDegrees(event) {
   }
 
   const alpha = Number(event?.alpha);
-  const isAbsolute = Boolean(event?.absolute);
-  if (!isAbsolute || !Number.isFinite(alpha)) {
+  if (!Number.isFinite(alpha)) {
     return null;
   }
 
-  // Only use alpha when the browser marks it as absolute (north-referenced).
+  // Some Android browsers report absolute=false even when alpha is usable.
   return ((360 - alpha) % 360 + 360) % 360;
 }
 
@@ -1910,8 +1909,10 @@ export function OsmMapPage({ isUserMode = true, enableEditTools = true }) {
     };
 
     window.addEventListener("deviceorientation", handleDeviceOrientation, true);
+    window.addEventListener("deviceorientationabsolute", handleDeviceOrientation, true);
     return () => {
       window.removeEventListener("deviceorientation", handleDeviceOrientation, true);
+      window.removeEventListener("deviceorientationabsolute", handleDeviceOrientation, true);
     };
   }, [gyroSupported, useGyroRotation]);
 
