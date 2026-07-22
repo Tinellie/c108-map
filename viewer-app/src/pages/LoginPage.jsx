@@ -18,6 +18,22 @@ export function LoginPage({ onLoginSuccess }) {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
 
+  async function performLogin(nextUsername, nextPassword) {
+    const response = await fetch(AUTH_LOGIN_API, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        username: String(nextUsername || "").trim(),
+        password: String(nextPassword || "")
+      })
+    });
+
+    await readJson(response);
+    if (typeof onLoginSuccess === "function") {
+      onLoginSuccess();
+    }
+  }
+
   async function submitLogin(event) {
     event.preventDefault();
     if (submitting) {
@@ -28,18 +44,7 @@ export function LoginPage({ onLoginSuccess }) {
     setError("");
 
     try {
-      const response = await fetch(AUTH_LOGIN_API, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          username: String(username || "").trim(),
-          password: String(password || "")
-        })
-      });
-      await readJson(response);
-      if (typeof onLoginSuccess === "function") {
-        onLoginSuccess();
-      }
+      await performLogin(username, password);
     } catch (loginError) {
       setError(loginError.message || "登录失败");
     } finally {
@@ -47,8 +52,39 @@ export function LoginPage({ onLoginSuccess }) {
     }
   }
 
+  async function loginAsGuest() {
+    if (submitting) {
+      return;
+    }
+
+    const guestUsername = "guest";
+    const guestPassword = "12345678";
+
+    setUsername(guestUsername);
+    setPassword(guestPassword);
+    setSubmitting(true);
+    setError("");
+
+    try {
+      await performLogin(guestUsername, guestPassword);
+    } catch (loginError) {
+      setError(loginError.message || "访客登录失败");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
   return (
-    <Box sx={{ minHeight: "100vh", display: "grid", placeItems: "center", px: 2, bgcolor: "background.default" }}>
+    <Box sx={{ position: "relative", minHeight: "100vh", display: "grid", placeItems: "center", px: 2, bgcolor: "background.default" }}>
+      <Button
+        variant="outlined"
+        size="small"
+        onClick={loginAsGuest}
+        disabled={submitting}
+        sx={{ position: "absolute", top: 16, right: 16 }}
+      >
+        访客
+      </Button>
       <Paper elevation={0} sx={{ width: "100%", maxWidth: 420, p: 3, border: "1px solid #eadbc7", borderRadius: 3 }}>
         <Stack component="form" spacing={2} onSubmit={submitLogin}>
           <Typography variant="h5" sx={{ fontWeight: 700 }}>
