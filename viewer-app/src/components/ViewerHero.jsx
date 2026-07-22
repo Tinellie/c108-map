@@ -14,7 +14,7 @@ export function ViewerHero({ stats, usingMock }) {
           社团收藏
         </Typography>
         <Typography sx={{ mt: 1, color: "#6f6457" }}>
-          快速筛选、查看社交账号和详情。(v1.1)
+          快速筛选、查看社交账号和详情。(v1.1.002)
         </Typography>
 
         <Stack direction={{ xs: "column", md: "row" }} spacing={1.2} sx={{ mt: 2.5 }}>

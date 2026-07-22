@@ -54,51 +54,126 @@ async function waitForLoginOutcome(page, loginWait) {
   return outcome;
 }
 
-async function triggerLoginSubmit(page, loginWait) {
+async function detectLoginOutcomeWithin(page, loginWait, { timeoutMs } = {}) {
+  const timeout = Number(timeoutMs || loginWait?.timeoutMs || 300000);
+  const deadline = Date.now() + timeout;
+
+  while (Date.now() < deadline) {
+    const outcome = await page.evaluate(
+      ({ successSelector, invalidCredentialSelector, invalidCredentialText, loginFormSelector, loginTitleKeyword }) => {
+        if (successSelector && document.querySelector(successSelector)) {
+          return "success";
+        }
+
+        if (invalidCredentialSelector) {
+          const errorNode = document.querySelector(invalidCredentialSelector);
+          const errorText = (errorNode?.textContent || "").replace(/\s+/g, " ").trim();
+          if (errorText && (!invalidCredentialText || errorText.includes(invalidCredentialText))) {
+            return "invalid-credentials";
+          }
+        }
+
+        const title = document.title || "";
+        const hasLoginTitle = Boolean(loginTitleKeyword && title.includes(loginTitleKeyword));
+        const hasLoginForm = Boolean(loginFormSelector && document.querySelector(loginFormSelector));
+        if (hasLoginTitle || hasLoginForm) {
+          return "still-login";
+        }
+
+        return "unknown";
+      },
+      {
+        successSelector: loginWait?.successSelector || "",
+        invalidCredentialSelector: loginWait?.invalidCredentialSelector || "",
+        invalidCredentialText: loginWait?.invalidCredentialText || "",
+        loginFormSelector: loginWait?.loginFormSelector || "",
+        loginTitleKeyword: loginWait?.loginTitleKeyword || ""
+      }
+    );
+
+    if (outcome === "success" || outcome === "invalid-credentials") {
+      return outcome;
+    }
+
+    await new Promise((resolve) => setTimeout(resolve, 500));
+  }
+
+  return "timeout";
+}
+
+function getSubmitAttempts(page, loginWait) {
   const submitSelector = String(loginWait?.submitSelector || "").trim();
-  if (submitSelector) {
-    try {
-      await page.waitForSelector(submitSelector, { timeout: 10000 });
-      await page.click(submitSelector, { delay: 30 });
-      return "button-click";
-    } catch {
-      // Fall through to alternative submit actions.
+
+  return [
+    {
+      name: "button-click",
+      run: async () => {
+        if (!submitSelector) {
+          throw new Error("missing submit selector");
+        }
+
+        await page.waitForSelector(submitSelector, { timeout: 10000 });
+        await page.click(submitSelector, { delay: 30 });
+      }
+    },
+    {
+      name: "form-request-submit",
+      run: async () => {
+        const submittedByForm = await page.evaluate(({ passwordSelector }) => {
+          const passwordInput = document.querySelector(passwordSelector);
+          if (!passwordInput) {
+            return false;
+          }
+
+          const form = passwordInput.closest("form");
+          if (!form || typeof form.requestSubmit !== "function") {
+            return false;
+          }
+
+          form.requestSubmit();
+          return true;
+        }, {
+          passwordSelector: loginWait.passwordSelector
+        });
+
+        if (!submittedByForm) {
+          throw new Error("requestSubmit unavailable");
+        }
+      }
+    },
+    {
+      name: "form-submit",
+      run: async () => {
+        const submittedByForm = await page.evaluate(({ passwordSelector }) => {
+          const passwordInput = document.querySelector(passwordSelector);
+          if (!passwordInput) {
+            return false;
+          }
+
+          const form = passwordInput.closest("form");
+          if (!form || typeof form.submit !== "function") {
+            return false;
+          }
+
+          form.submit();
+          return true;
+        }, {
+          passwordSelector: loginWait.passwordSelector
+        });
+
+        if (!submittedByForm) {
+          throw new Error("form.submit unavailable");
+        }
+      }
+    },
+    {
+      name: "enter-key",
+      run: async () => {
+        await page.locator(loginWait.passwordSelector).focus();
+        await page.keyboard.press("Enter");
+      }
     }
-  }
-
-  const submittedByForm = await page.evaluate(({ passwordSelector }) => {
-    const passwordInput = document.querySelector(passwordSelector);
-    if (!passwordInput) {
-      return false;
-    }
-
-    const form = passwordInput.closest("form");
-    if (!form) {
-      return false;
-    }
-
-    if (typeof form.requestSubmit === "function") {
-      form.requestSubmit();
-      return true;
-    }
-
-    if (typeof form.submit === "function") {
-      form.submit();
-      return true;
-    }
-
-    return false;
-  }, {
-    passwordSelector: loginWait.passwordSelector
-  });
-
-  if (submittedByForm) {
-    return "form-submit";
-  }
-
-  await page.locator(loginWait.passwordSelector).focus();
-  await page.keyboard.press("Enter");
-  return "enter-key";
+  ];
 }
 
 async function submitLoginForm(page, loginWait, loginCredentials) {
@@ -108,29 +183,47 @@ async function submitLoginForm(page, loginWait, loginCredentials) {
   await page.locator(loginWait.usernameSelector).fill(String(loginCredentials.username || ""));
   await page.locator(loginWait.passwordSelector).fill(String(loginCredentials.password || ""));
 
-  const submitMethod = await triggerLoginSubmit(page, loginWait);
-  logInfo("Circle.ms login submit", `method=${submitMethod}`);
+  const attempts = getSubmitAttempts(page, loginWait);
+  let lastAttemptError = null;
 
-  await Promise.allSettled([
-    page.waitForNavigation({ waitUntil: "networkidle2", timeout: 15000 })
-  ]);
+  for (const attempt of attempts) {
+    try {
+      await Promise.allSettled([
+        page.waitForNavigation({ waitUntil: "domcontentloaded", timeout: 12000 }),
+        attempt.run()
+      ]);
 
-  let outcome = "";
-  try {
-    outcome = await waitForLoginOutcome(page, loginWait);
-  } catch (error) {
-    const timeoutMessage = String(error?.message || "");
-    if (timeoutMessage.includes("Waiting failed")) {
-      throw new Error("登录按钮已触发，但登录结果等待超时（仍停留登录页或页面结构变化）");
+      logInfo("Circle.ms login submit", `method=${attempt.name}`);
+
+      const outcome = await detectLoginOutcomeWithin(page, loginWait, { timeoutMs: 18000 });
+      if (outcome === "success") {
+        return;
+      }
+
+      if (outcome === "invalid-credentials") {
+        const error = new Error("Circle.ms 登录失败：邮箱或密码错误");
+        error.code = "INVALID_CIRCLE_MS_CREDENTIALS";
+        throw error;
+      }
+
+      if (outcome === "still-login" || outcome === "timeout" || outcome === "unknown") {
+        lastAttemptError = new Error(`登录提交后仍未通过验证：${outcome}`);
+        continue;
+      }
+    } catch (error) {
+      if (error?.code === "INVALID_CIRCLE_MS_CREDENTIALS") {
+        throw error;
+      }
+
+      lastAttemptError = error;
     }
-    throw error;
   }
 
-  if (outcome === "invalid-credentials") {
-    const error = new Error("Circle.ms 登录失败：邮箱或密码错误");
-    error.code = "INVALID_CIRCLE_MS_CREDENTIALS";
-    throw error;
-  }
+  const timeoutError = new Error(
+    `自动登录未成功：已尝试点击按钮/表单提交/回车，仍停留登录态。${lastAttemptError?.message ? ` (${lastAttemptError.message})` : ""}`
+  );
+  timeoutError.code = "LOGIN_OUTCOME_TIMEOUT";
+  throw timeoutError;
 }
 
 export async function ensureLoggedInIfNeeded(page, profile, { loginCredentials } = {}) {
