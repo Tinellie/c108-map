@@ -1904,7 +1904,7 @@ export function OsmMapPage({ isUserMode = true, enableEditTools = true }) {
         return;
       }
 
-      const nextRotation = normalizeSignedDegrees(headingDeg);
+      const nextRotation = normalizeSignedDegrees(-headingDeg);
       setMapRotationDeg(roundCoordinate(nextRotation));
     };
 
