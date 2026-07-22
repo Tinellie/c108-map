@@ -625,6 +625,8 @@ function buildEditorEntityGraph(page) {
     return rect;
   };
 
+  const worldRectCache = new Map();
+
   const getWorldPolygon = (entityId, pad = 0) => {
     const localRect = getLocalRect(entityId);
     const transform = getWorldTransform(entityId);
@@ -632,12 +634,22 @@ function buildEditorEntityGraph(page) {
     return localRect ? rectCorners(expandRect(localRect, localPad)).map((point) => transformPoint(transform, point)) : [];
   };
 
-  const getWorldRect = (entityId) => rectFromPoints(getWorldPolygon(entityId));
+  const getWorldRect = (entityId, pad = 0) => {
+    const cacheKey = `${entityId}|${pad}`;
+    if (worldRectCache.has(cacheKey)) {
+      return worldRectCache.get(cacheKey);
+    }
+    const rect = rectFromPoints(getWorldPolygon(entityId, pad));
+    worldRectCache.set(cacheKey, rect);
+    return rect;
+  };
   const vectorToParentLocal = (parentId, vector) => parentId && byId.has(parentId)
     ? inverseTransformVector(getWorldTransform(parentId), vector)
     : vector;
 
-  return { byId, getWorldPolygon, getWorldRect, vectorToParentLocal };
+  const getChildren = (entityId) => childrenByParent.get(entityId) || [];
+
+  return { byId, getChildren, getWorldPolygon, getWorldRect, vectorToParentLocal };
 }
 
 function transformEditorOverlayPoint(point, overlay) {
@@ -1323,6 +1335,7 @@ function drawEditorOverlayEntities(context, page, graph, overlay, {
   showLabels,
   userMode,
   mapRotationDeg,
+  visibleWorldRect,
   islandLabelSetting,
   circleBoothColorByFullKey,
   circleBoothLabelByFullKey,
@@ -1334,6 +1347,71 @@ function drawEditorOverlayEntities(context, page, graph, overlay, {
   selectedLabelColorIndexSet
 }) {
   if (!page || !graph) {
+    return;
+  }
+
+  const rectsOverlap = (left, right) => (
+    left.x < right.x + right.w
+      && left.x + left.w > right.x
+      && left.y < right.y + right.h
+      && left.y + left.h > right.y
+  );
+
+  const getEntityPad = (entity) => {
+    if (!entity) {
+      return 0;
+    }
+    if (entity.type === "hall") {
+      return 12;
+    }
+    if (entity.type === "island") {
+      return 8;
+    }
+    if (entity.type === "group") {
+      return 4;
+    }
+    return 0;
+  };
+
+  const getOverlayRect = (entity, pad = 0) => {
+    if (!entity) {
+      return null;
+    }
+    const worldRect = graph.getWorldRect(entity.id, pad);
+    const polygon = rectCorners(worldRect).map((point) => transformEditorOverlayPoint(point, overlay));
+    return rectFromPoints(polygon);
+  };
+
+  const pageRoots = (() => {
+    const roots = [];
+    const seen = new Set();
+    const allEntities = [
+      ...(page.entities.halls || []),
+      ...(page.entities.islands || []),
+      ...(page.entities.groups || []),
+      ...(page.entities.booths || [])
+    ];
+    allEntities.forEach((entity) => {
+      if (!entity?.id || seen.has(entity.id)) {
+        return;
+      }
+      if (entity.parentId && graph.byId.has(entity.parentId)) {
+        return;
+      }
+      seen.add(entity.id);
+      roots.push(entity);
+    });
+    return roots;
+  })();
+
+  const pageWorldRect = (() => {
+    const rects = pageRoots
+      .map((entity) => getOverlayRect(entity, getEntityPad(entity)))
+      .filter(Boolean);
+    return rects.length ? rectFromPoints(rects.flatMap((rect) => rectCorners(rect))) : null;
+  })();
+
+  if (pageWorldRect && visibleWorldRect && !rectsOverlap(pageWorldRect, visibleWorldRect)) {
     return;
   }
 
@@ -1420,6 +1498,20 @@ function drawEditorOverlayEntities(context, page, graph, overlay, {
 
   const labelCandidates = [];
   const boothCollisionRects = [];
+  const drawnBoothIds = new Set();
+  const drawnBoothPairKeys = new Set();
+  const booths = page.entities.booths || [];
+  const boothPairByKey = new Map();
+  booths.forEach((booth) => {
+    const suffix = normalizeBoothPairSuffix(booth.boothSuffix);
+    if (!suffix || !booth.boothNumber) {
+      return;
+    }
+    const key = `${booth.parentId || "root"}::${booth.boothNumber}`;
+    const pair = boothPairByKey.get(key) || { a: null, b: null };
+    pair[suffix] = booth;
+    boothPairByKey.set(key, pair);
+  });
 
   const drawEntityShape = (entity, polygon, rect, labelOverride = null, selectedOverride = null, overlayFillColor = null) => {
     const style = EDITOR_ENTITY_STYLE[entity.type];
@@ -1472,127 +1564,125 @@ function drawEditorOverlayEntities(context, page, graph, overlay, {
     }
   };
 
-  const drawEntity = (entity, pad = 0) => {
+  const drawEntity = (entity, pad = getEntityPad(entity)) => {
+    if (!entity) {
+      return;
+    }
+    const rect = getOverlayRect(entity, pad);
+    if (!rect || (visibleWorldRect && !rectsOverlap(rect, visibleWorldRect))) {
+      return;
+    }
     const polygon = graph.getWorldPolygon(entity.id, pad).map((point) => transformEditorOverlayPoint(point, overlay));
     if (polygon.length < 3) {
       return;
     }
-    const rect = rectFromPoints(polygon);
+    const drawnRect = rectFromPoints(polygon);
     const boothOverlayColor = entity.type === "booth" ? getBoothOverlayColor(entity) : null;
-    drawEntityShape(entity, polygon, rect, null, null, boothOverlayColor);
+    drawEntityShape(entity, polygon, drawnRect, null, null, boothOverlayColor);
     if (entity.type === "booth") {
-      boothCollisionRects.push(rect);
-      queueBoothColorLabel(entity, rect);
+      boothCollisionRects.push(drawnRect);
+      queueBoothColorLabel(entity, drawnRect);
     }
   };
 
-  if (!userMode) {
-    (page.entities.halls || []).forEach((entity) => drawEntity(entity, 12));
-  }
-  (page.entities.islands || []).forEach((entity) => drawEntity(entity, 8));
-  (page.entities.groups || []).forEach((entity) => drawEntity(entity, 4));
-  const booths = page.entities.booths || [];
-  const pairedBoothIds = new Set();
-  const boothPairByKey = new Map();
-  booths.forEach((booth) => {
-    const suffix = normalizeBoothPairSuffix(booth.boothSuffix);
-    if (!suffix || !booth.boothNumber) {
+  const drawEntityTree = (entity) => {
+    if (!entity) {
       return;
     }
-    const key = `${booth.parentId || "root"}::${booth.boothNumber}`;
-    const pair = boothPairByKey.get(key) || { a: null, b: null };
-    pair[suffix] = booth;
-    boothPairByKey.set(key, pair);
-  });
+    const pad = getEntityPad(entity);
+    const rect = getOverlayRect(entity, pad);
+    if (!rect || (visibleWorldRect && !rectsOverlap(rect, visibleWorldRect))) {
+      return;
+    }
 
-  boothPairByKey.forEach((pair) => {
-    if (!pair.a || !pair.b) {
-      return;
-    }
-    const polygonA = graph.getWorldPolygon(pair.a.id, 0).map((point) => transformEditorOverlayPoint(point, overlay));
-    const polygonB = graph.getWorldPolygon(pair.b.id, 0).map((point) => transformEditorOverlayPoint(point, overlay));
-    const mergedPolygon = tryBuildMergedBoothPolygon(polygonA, polygonB);
-    if (!mergedPolygon) {
-      const rectA = rectFromPoints(polygonA);
-      const rectB = rectFromPoints(polygonB);
-      boothCollisionRects.push(rectA, rectB);
-      queueBoothColorLabel(pair.a, rectA);
-      queueBoothColorLabel(pair.b, rectB);
-      return;
-    }
-    const overlayColorA = getBoothOverlayColor(pair.a);
-    const overlayColorB = getBoothOverlayColor(pair.b);
-    pairedBoothIds.add(pair.a.id);
-    pairedBoothIds.add(pair.b.id);
-    const mergedRect = rectFromPoints(mergedPolygon);
-    const rectA = rectFromPoints(polygonA);
-    const rectB = rectFromPoints(polygonB);
-    const pairBoothKey = getBoothPairKey(pair.a);
-    const useMergedAbOverlay = Boolean(pairBoothKey) && Boolean(circleBoothAbKeySet?.has(pairBoothKey));
-    const mergedLabel = String(pair.a.boothNumber || "").trim();
-    const selected = pair.a.id === selectedEntityId || pair.b.id === selectedEntityId;
-    // Always draw one shared booth frame/label for an ab pair.
-    drawEntityShape(pair.a, mergedPolygon, mergedRect, mergedLabel, selected);
+    if (entity.type === "booth") {
+      const pairKey = `${entity.parentId || "root"}::${entity.boothNumber || ""}`;
+      const pair = boothPairByKey.get(pairKey);
+      if (pair && pair.a && pair.b && !drawnBoothPairKeys.has(pairKey)) {
+        drawnBoothPairKeys.add(pairKey);
+        const polygonA = graph.getWorldPolygon(pair.a.id, 0).map((point) => transformEditorOverlayPoint(point, overlay));
+        const polygonB = graph.getWorldPolygon(pair.b.id, 0).map((point) => transformEditorOverlayPoint(point, overlay));
+        const mergedPolygon = tryBuildMergedBoothPolygon(polygonA, polygonB);
+        if (!mergedPolygon) {
+          const rectA = rectFromPoints(polygonA);
+          const rectB = rectFromPoints(polygonB);
+          drawnBoothIds.add(pair.a.id);
+          drawnBoothIds.add(pair.b.id);
+          boothCollisionRects.push(rectA, rectB);
+          queueBoothColorLabel(pair.a, rectA);
+          queueBoothColorLabel(pair.b, rectB);
+        } else {
+          const overlayColorA = getBoothOverlayColor(pair.a);
+          const overlayColorB = getBoothOverlayColor(pair.b);
+          drawnBoothIds.add(pair.a.id);
+          drawnBoothIds.add(pair.b.id);
+          const mergedRect = rectFromPoints(mergedPolygon);
+          const rectA = rectFromPoints(polygonA);
+          const rectB = rectFromPoints(polygonB);
+          const pairBoothKey = getBoothPairKey(pair.a);
+          const useMergedAbOverlay = Boolean(pairBoothKey) && Boolean(circleBoothAbKeySet?.has(pairBoothKey));
+          const mergedLabel = String(pair.a.boothNumber || "").trim();
+          const selected = pair.a.id === selectedEntityId || pair.b.id === selectedEntityId;
+          drawEntityShape(pair.a, mergedPolygon, mergedRect, mergedLabel, selected);
 
-    if (useMergedAbOverlay) {
-      boothCollisionRects.push(mergedRect);
-      const pairLabelInfo = getBoothLabelInfo(pair.a);
-      if (pairLabelInfo) {
-        labelCandidates.push({
-          id: pair.a.id,
-          key: `${page.page}|${pairBoothKey}|ab`,
-          pageNumber: page.page,
-          text: `${pairLabelInfo.circleName}(${pairLabelInfo.authorName})`,
-          center: { x: mergedRect.x + mergedRect.w / 2, y: mergedRect.y + mergedRect.h / 2 },
-          boothRect: mergedRect,
-          size: Math.max(1.2, Math.min(2.6, Math.min(mergedRect.w, mergedRect.h) * 0.32))
-        });
+          if (useMergedAbOverlay) {
+            boothCollisionRects.push(mergedRect);
+            const pairLabelInfo = getBoothLabelInfo(pair.a);
+            if (pairLabelInfo) {
+              labelCandidates.push({
+                id: pair.a.id,
+                key: `${page.page}|${pairBoothKey}|ab`,
+                pageNumber: page.page,
+                text: `${pairLabelInfo.circleName}(${pairLabelInfo.authorName})`,
+                center: { x: mergedRect.x + mergedRect.w / 2, y: mergedRect.y + mergedRect.h / 2 },
+                boothRect: mergedRect,
+                size: Math.max(1.2, Math.min(2.6, Math.min(mergedRect.w, mergedRect.h) * 0.32))
+              });
+            }
+            const mergedOverlayColor = overlayColorA || overlayColorB;
+            if (mergedOverlayColor) {
+              context.beginPath();
+              drawPolygon(context, mergedPolygon);
+              context.closePath();
+              context.fillStyle = mergedOverlayColor;
+              context.fill();
+            }
+          } else {
+            boothCollisionRects.push(rectA, rectB);
+            queueBoothColorLabel(pair.a, rectA);
+            queueBoothColorLabel(pair.b, rectB);
+            if (overlayColorA) {
+              context.beginPath();
+              drawPolygon(context, polygonA);
+              context.closePath();
+              context.fillStyle = overlayColorA;
+              context.fill();
+            }
+            if (overlayColorB) {
+              context.beginPath();
+              drawPolygon(context, polygonB);
+              context.closePath();
+              context.fillStyle = overlayColorB;
+              context.fill();
+            }
+          }
+        }
+        return;
       }
-      const mergedOverlayColor = overlayColorA || overlayColorB;
-      if (mergedOverlayColor) {
-        context.beginPath();
-        drawPolygon(context, mergedPolygon);
-        context.closePath();
-        context.fillStyle = mergedOverlayColor;
-        context.fill();
+
+      if (drawnBoothIds.has(entity.id)) {
+        return;
       }
-      return;
+      drawnBoothIds.add(entity.id);
     }
 
-    boothCollisionRects.push(rectA, rectB);
-    queueBoothColorLabel(pair.a, rectA);
-    queueBoothColorLabel(pair.b, rectB);
+    drawEntity(entity, pad);
+    graph.getChildren(entity.id).forEach((childId) => {
+      drawEntityTree(graph.byId.get(childId));
+    });
+  };
 
-    // Draw translucent color overlays independently on each half with no stroke.
-    if (overlayColorA) {
-      context.beginPath();
-      drawPolygon(context, polygonA);
-      context.closePath();
-      context.fillStyle = overlayColorA;
-      context.fill();
-    }
-    if (overlayColorB) {
-      context.beginPath();
-      drawPolygon(context, polygonB);
-      context.closePath();
-      context.fillStyle = overlayColorB;
-      context.fill();
-    }
-  });
-
-  booths.forEach((entity) => {
-    if (pairedBoothIds.has(entity.id)) {
-      return;
-    }
-    drawEntity(entity, 0);
-  });
-
-  const rectsOverlap = (left, right) => (
-    left.x < right.x + right.w
-      && left.x + left.w > right.x
-      && left.y < right.y + right.h
-      && left.y + left.h > right.y
-  );
+  pageRoots.forEach((entity) => drawEntityTree(entity));
 
   const drawBoothSideLabels = () => {
     if (!labelCandidates.length) {
@@ -2483,6 +2573,7 @@ export function OsmMapPage({ isUserMode = true, enableEditTools = true }) {
             showLabels: effectiveShowEditorLabels,
             userMode: isUserMode,
             mapRotationDeg,
+            visibleWorldRect,
             islandLabelSetting: normalizeIslandLabelSetting(editorPageIslandLabelSettings[String(page.page)]),
             circleBoothColorByFullKey: circleBoothColorMaps.colorByFullKey,
             circleBoothLabelByFullKey: circleBoothColorMaps.labelByFullKey,
