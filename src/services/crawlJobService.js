@@ -36,10 +36,13 @@ function sanitizeSummary(summary) {
   };
 }
 
-function sanitizeProgress(progress) {
+function sanitizeProgress(progress, jobId) {
   if (!progress || typeof progress !== "object") {
     return null;
   }
+
+  const liveScreenshotPath = String(progress.liveScreenshotPath || "").replace(/\\/g, "/").trim();
+  const liveScreenshotCapturedAt = String(progress.liveScreenshotCapturedAt || "").trim();
 
   return {
     stage: String(progress.stage || "").trim() || "unknown",
@@ -51,7 +54,12 @@ function sanitizeProgress(progress) {
     detailTotal: Number(progress.detailTotal || 0),
     detailFailed: Number(progress.detailFailed || 0),
     message: String(progress.message || "").trim(),
-    currentCircleId: String(progress.currentCircleId || "").trim()
+    currentCircleId: String(progress.currentCircleId || "").trim(),
+    liveScreenshotPath: liveScreenshotPath || undefined,
+    liveScreenshotCapturedAt: liveScreenshotCapturedAt || undefined,
+    liveScreenshotUrl: liveScreenshotPath
+      ? `/api/crawl/jobs/${encodeURIComponent(String(jobId || ""))}/live-screenshot`
+      : undefined
   };
 }
 
@@ -96,7 +104,7 @@ function toPublicJob(job) {
       crawlMode: job.request.crawlMode
     },
     summary: sanitizeSummary(job.summary),
-    progress: sanitizeProgress(job.progress),
+    progress: sanitizeProgress(job.progress, job.jobId),
     error: sanitizeError(job.error, job.jobId)
   };
 }
@@ -263,6 +271,7 @@ export function startCrawlJob(input) {
   };
 
   const done = runCrawlPipeline({
+    jobId: job.jobId,
     url,
     profile,
     headlessOverride,

@@ -15,6 +15,8 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const projectRoot = path.resolve(__dirname, "..", "..");
 const JOB_FAILURE_SCREENSHOT_DIR = path.join(projectRoot, "storage", "crawl_debug", "job_failures");
+const JOB_LIVE_SCREENSHOT_DIR = path.join(projectRoot, "storage", "crawl_debug", "job_live");
+const LIVE_SCREENSHOT_INTERVAL_MS = 12000;
 
 const CRAWL_MODES = {
   full_list_full_detail: {
@@ -90,11 +92,36 @@ async function captureFailureScreenshot(page, { crawlMode } = {}) {
   };
 }
 
+async function captureLiveScreenshot(page, { jobId } = {}) {
+  if (!page || page.isClosed()) {
+    return null;
+  }
+
+  await fs.mkdir(JOB_LIVE_SCREENSHOT_DIR, { recursive: true });
+  const safeJobId = String(jobId || "job").replace(/[^a-z0-9_-]+/gi, "_");
+  const fileName = `${safeJobId}.jpg`;
+  const absolutePath = path.join(JOB_LIVE_SCREENSHOT_DIR, fileName);
+
+  await page.screenshot({
+    path: absolutePath,
+    type: "jpeg",
+    quality: 65,
+    fullPage: false
+  });
+
+  return {
+    absolutePath,
+    relativePath: normalizeRelativePath(absolutePath),
+    capturedAt: new Date().toISOString()
+  };
+}
+
 export async function runCrawlPipeline({
   url,
   profile,
   headlessOverride,
   crawlMode = "full_list_full_detail",
+  jobId,
   loginCredentials,
   onProgress
 }) {
@@ -109,7 +136,7 @@ export async function runCrawlPipeline({
   const existingCircleIds = await loadExistingCircleIdSet();
   const existingCircleIdsAtStart = new Set(existingCircleIds);
   logSuccess("Existing circle ids loaded", `count=${existingCircleIds.size}`);
-  emitProgress({
+  await emitProgressWithLiveScreenshot({
     stage: "list",
     originalCount: existingCircleIdsAtStart.size,
     newCount: 0,
@@ -137,6 +164,37 @@ export async function runCrawlPipeline({
   let pageIndex = 0;
   let lastScraped = null;
   let page = null;
+  let lastLiveScreenshotAtMs = 0;
+
+  async function emitProgressWithLiveScreenshot(nextProgress, { forceScreenshot = false } = {}) {
+    const nowMs = Date.now();
+    const shouldCapture =
+      Boolean(forceScreenshot) ||
+      !lastLiveScreenshotAtMs ||
+      nowMs - lastLiveScreenshotAtMs >= LIVE_SCREENSHOT_INTERVAL_MS;
+
+    if (!shouldCapture) {
+      emitProgress(nextProgress);
+      return;
+    }
+
+    try {
+      const screenshot = await captureLiveScreenshot(page, { jobId });
+      if (screenshot?.relativePath) {
+        lastLiveScreenshotAtMs = nowMs;
+        emitProgress({
+          ...nextProgress,
+          liveScreenshotPath: screenshot.relativePath,
+          liveScreenshotCapturedAt: screenshot.capturedAt
+        });
+        return;
+      }
+    } catch (error) {
+      logWarn("Live screenshot capture failed", error?.message || "unknown");
+    }
+
+    emitProgress(nextProgress);
+  }
 
   try {
     ({ page } = session);
@@ -200,7 +258,7 @@ export async function runCrawlPipeline({
       }
       detailTargets = allCircles.size;
 
-      emitProgress({
+      await emitProgressWithLiveScreenshot({
         stage: "list",
         originalCount: existingCircleIdsAtStart.size,
         newCount: newCircleIdsSeen.size,
@@ -256,7 +314,7 @@ export async function runCrawlPipeline({
       let detailDone = 0;
       let detailFailed = 0;
 
-      emitProgress({
+      await emitProgressWithLiveScreenshot({
         stage: "detail",
         originalCount: existingCircleIdsAtStart.size,
         newCount: newCircleIdsSeen.size,
@@ -266,7 +324,7 @@ export async function runCrawlPipeline({
         detailTotal: allCircles.size,
         detailFailed,
         message: `Detail crawl started: 0/${allCircles.size}`
-      });
+      }, { forceScreenshot: true });
 
       for (const circle of allCircles.values()) {
         try {
@@ -280,7 +338,7 @@ export async function runCrawlPipeline({
           logWarn("Circle detail crawl failed", `circle_id=${circle.circle_id}, reason=${error?.message || "unknown"}`);
         } finally {
           detailDone += 1;
-          emitProgress({
+          await emitProgressWithLiveScreenshot({
             stage: "detail",
             originalCount: existingCircleIdsAtStart.size,
             newCount: newCircleIdsSeen.size,
@@ -298,7 +356,7 @@ export async function runCrawlPipeline({
       logStep("Writing detail fields to database", `rows=${detailResults.length}`);
       await upsertCircleDetails(detailResults);
       logSuccess("Detail write complete", `rows=${detailResults.length}`);
-      emitProgress({
+      await emitProgressWithLiveScreenshot({
         stage: "detail",
         originalCount: existingCircleIdsAtStart.size,
         newCount: newCircleIdsSeen.size,
@@ -308,7 +366,7 @@ export async function runCrawlPipeline({
         detailTotal: allCircles.size,
         detailFailed,
         message: `Detail write complete: ${detailResults.length}`
-      });
+      }, { forceScreenshot: true });
     } else if (!mode.crawlDetail) {
       logInfo("Detail crawl skipped", `mode=${crawlMode}`);
     }

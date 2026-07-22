@@ -452,6 +452,37 @@ app.get("/api/crawl/jobs/:jobId", (req, res) => {
   res.json({ data: job });
 });
 
+app.get("/api/crawl/jobs/:jobId/live-screenshot", async (req, res) => {
+  const job = getCrawlJobById(req.params.jobId);
+  if (!job) {
+    return res.status(404).json({ message: "job not found" });
+  }
+
+  const liveScreenshotPath = String(job?.progress?.liveScreenshotPath || "").replace(/\\/g, "/").trim();
+  if (!liveScreenshotPath) {
+    return res.status(404).json({ message: "live screenshot not found" });
+  }
+
+  const allowedPrefix = "storage/crawl_debug/job_live/";
+  if (!liveScreenshotPath.startsWith(allowedPrefix) || path.extname(liveScreenshotPath).toLowerCase() !== ".jpg") {
+    return res.status(400).json({ message: "invalid screenshot path" });
+  }
+
+  const absolutePath = path.resolve(projectRoot, liveScreenshotPath);
+  const relativeToRoot = path.relative(projectRoot, absolutePath);
+  if (relativeToRoot.startsWith("..") || path.isAbsolute(relativeToRoot)) {
+    return res.status(400).json({ message: "invalid screenshot path" });
+  }
+
+  try {
+    await fs.access(absolutePath);
+    res.setHeader("Cache-Control", "no-store");
+    return res.sendFile(absolutePath);
+  } catch {
+    return res.status(404).json({ message: "live screenshot not found" });
+  }
+});
+
 app.get("/api/crawl/jobs/:jobId/failure-screenshot", async (req, res) => {
   const job = getCrawlJobById(req.params.jobId);
   if (!job) {

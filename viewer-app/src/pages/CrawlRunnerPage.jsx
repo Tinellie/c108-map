@@ -98,6 +98,25 @@ function getFailureScreenshotUrl(errorValue) {
   return String(errorValue.failureScreenshotUrl || "").trim();
 }
 
+function getLiveScreenshotSrc(progressValue) {
+  if (!progressValue || typeof progressValue !== "object") {
+    return "";
+  }
+
+  const baseUrl = String(progressValue.liveScreenshotUrl || "").trim();
+  if (!baseUrl) {
+    return "";
+  }
+
+  const capturedAt = String(progressValue.liveScreenshotCapturedAt || "").trim();
+  if (!capturedAt) {
+    return `${baseUrl}?t=${Date.now()}`;
+  }
+
+  const stamp = encodeURIComponent(capturedAt);
+  return `${baseUrl}?t=${stamp}`;
+}
+
 export function CrawlRunnerPage() {
   const [loadingOptions, setLoadingOptions] = useState(true);
   const [optionsError, setOptionsError] = useState("");
@@ -317,6 +336,22 @@ export function CrawlRunnerPage() {
                         <Typography variant="body2" color="text.secondary">
                           {runningJob.progress.message}
                         </Typography>
+                      ) : null}
+                      {getLiveScreenshotSrc(runningJob.progress) ? (
+                        <Box
+                          component="img"
+                          src={getLiveScreenshotSrc(runningJob.progress)}
+                          alt="抓取进行中截图"
+                          sx={{
+                            mt: 1,
+                            width: "100%",
+                            maxWidth: 920,
+                            borderRadius: 1,
+                            border: "1px solid #e7d8c5",
+                            objectFit: "contain",
+                            backgroundColor: "#faf6ef"
+                          }}
+                        />
                       ) : null}
                     </Stack>
                   ) : null}
