@@ -43,6 +43,8 @@ function sanitizeProgress(progress, jobId) {
 
   const liveScreenshotPath = String(progress.liveScreenshotPath || "").replace(/\\/g, "/").trim();
   const liveScreenshotCapturedAt = String(progress.liveScreenshotCapturedAt || "").trim();
+  const debugLog = String(progress.debugLog || "").trim();
+  const debugLogAt = String(progress.debugLogAt || "").trim();
 
   return {
     stage: String(progress.stage || "").trim() || "unknown",
@@ -55,6 +57,8 @@ function sanitizeProgress(progress, jobId) {
     detailFailed: Number(progress.detailFailed || 0),
     message: String(progress.message || "").trim(),
     currentCircleId: String(progress.currentCircleId || "").trim(),
+    debugLog: debugLog || undefined,
+    debugLogAt: debugLogAt || undefined,
     liveScreenshotPath: liveScreenshotPath || undefined,
     liveScreenshotCapturedAt: liveScreenshotCapturedAt || undefined,
     liveScreenshotUrl: liveScreenshotPath
@@ -187,6 +191,29 @@ export function getCrawlJobById(jobId) {
   return jobHistory.find((job) => String(job.jobId) === target) || null;
 }
 
+export function cancelCurrentCrawlJob() {
+  if (!runningJob) {
+    const error = new Error("No running crawl job");
+    error.code = "NO_RUNNING_JOB";
+    throw error;
+  }
+
+  if (runningJob.status !== "running") {
+    return toPublicJob(runningJob);
+  }
+
+  runningJob.progress = {
+    ...(runningJob.progress || {}),
+    message: "取消请求已发送，正在停止任务..."
+  };
+
+  if (runningJob.abortController && !runningJob.abortController.signal.aborted) {
+    runningJob.abortController.abort();
+  }
+
+  return toPublicJob(runningJob);
+}
+
 export function startCrawlJob(input) {
   if (runningJob) {
     const error = new Error("A crawl job is already running");
@@ -257,6 +284,9 @@ export function startCrawlJob(input) {
     error: null
   };
 
+  const abortController = new AbortController();
+  job.abortController = abortController;
+
   runningJob = job;
 
   const updateProgress = (nextProgress) => {
@@ -276,6 +306,7 @@ export function startCrawlJob(input) {
     profile,
     headlessOverride,
     crawlMode,
+    cancelSignal: abortController.signal,
     loginCredentials: loginUsername && loginPassword
       ? { username: loginUsername, password: loginPassword }
       : null,
@@ -286,7 +317,7 @@ export function startCrawlJob(input) {
       job.summary = sanitizeSummary(summary);
     })
     .catch((error) => {
-      job.status = "failed";
+      job.status = error?.code === "CRAWL_CANCELLED" ? "cancelled" : "failed";
       job.error = {
         message: error?.message || "unknown error",
         code: error?.code || "",

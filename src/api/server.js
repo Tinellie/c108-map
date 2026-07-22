@@ -21,6 +21,7 @@ import {
   transferMapEditorSnapshot
 } from "../services/mapEditorSnapshotService.js";
 import {
+  cancelCurrentCrawlJob,
   getCrawlJobById,
   getCrawlJobHistory,
   getCrawlOptions,
@@ -435,6 +436,20 @@ app.get("/api/crawl/jobs/current", (_req, res) => {
   }
 
   res.json({ data: currentJob });
+});
+
+app.post("/api/crawl/jobs/current/cancel", (_req, res) => {
+  try {
+    const job = cancelCurrentCrawlJob();
+    res.json({ data: job });
+  } catch (error) {
+    if (error?.code === "NO_RUNNING_JOB") {
+      return res.status(409).json({ message: error.message });
+    }
+
+    logError("Cancel crawl job failed", error);
+    res.status(500).json({ message: "internal server error" });
+  }
 });
 
 app.get("/api/crawl/jobs", (req, res) => {

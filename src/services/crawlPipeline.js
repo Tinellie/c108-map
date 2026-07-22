@@ -18,6 +18,12 @@ const JOB_FAILURE_SCREENSHOT_DIR = path.join(projectRoot, "storage", "crawl_debu
 const JOB_LIVE_SCREENSHOT_DIR = path.join(projectRoot, "storage", "crawl_debug", "job_live");
 const LIVE_SCREENSHOT_INTERVAL_MS = 12000;
 
+function createCancelledError() {
+  const error = new Error("Crawl cancelled by user");
+  error.code = "CRAWL_CANCELLED";
+  return error;
+}
+
 const CRAWL_MODES = {
   full_list_full_detail: {
     crawlDetail: true,
@@ -122,11 +128,19 @@ export async function runCrawlPipeline({
   headlessOverride,
   crawlMode = "full_list_full_detail",
   jobId,
+  cancelSignal,
   loginCredentials,
   onProgress
 }) {
   const mode = CRAWL_MODES[crawlMode] || CRAWL_MODES.full_list_full_detail;
   const emitProgress = typeof onProgress === "function" ? onProgress : () => {};
+  const abortSignal = cancelSignal && typeof cancelSignal === "object" ? cancelSignal : null;
+
+  function throwIfCancelled() {
+    if (abortSignal?.aborted) {
+      throw createCancelledError();
+    }
+  }
 
   logStep("Ensuring database schema");
   await ensureSchema();
@@ -154,8 +168,13 @@ export async function runCrawlPipeline({
   let lastScraped = null;
   let page = null;
   let lastLiveScreenshotAtMs = 0;
+  let liveDebugTimer = null;
+  let liveDebugTickInFlight = false;
+  let abortHandler = null;
 
   async function emitProgressWithLiveScreenshot(nextProgress, { forceScreenshot = false } = {}) {
+    throwIfCancelled();
+
     const nowMs = Date.now();
     const shouldCapture =
       Boolean(forceScreenshot) ||
@@ -185,6 +204,49 @@ export async function runCrawlPipeline({
     emitProgress(nextProgress);
   }
 
+  function startLiveDebugTicker() {
+    if (liveDebugTimer) {
+      return;
+    }
+
+    const tick = () => {
+      if (liveDebugTickInFlight) {
+        return;
+      }
+
+      if (!page || page.isClosed() || abortSignal?.aborted) {
+        return;
+      }
+
+      liveDebugTickInFlight = true;
+      Promise.resolve()
+        .then(async () => {
+          const nowIso = new Date().toISOString();
+          const currentUrl = page.url();
+
+          await emitProgressWithLiveScreenshot(
+            {
+              debugLog: `[${nowIso}] heartbeat url=${currentUrl}`,
+              debugLogAt: nowIso
+            },
+            { forceScreenshot: true }
+          );
+        })
+        .catch((error) => {
+          if (abortSignal?.aborted) {
+            return;
+          }
+          logWarn("Live debug heartbeat failed", error?.message || "unknown");
+        })
+        .finally(() => {
+          liveDebugTickInFlight = false;
+        });
+    };
+
+    tick();
+    liveDebugTimer = setInterval(tick, LIVE_SCREENSHOT_INTERVAL_MS);
+  }
+
   await emitProgressWithLiveScreenshot({
     stage: "list",
     originalCount: existingCircleIdsAtStart.size,
@@ -198,9 +260,24 @@ export async function runCrawlPipeline({
   });
 
   try {
+    throwIfCancelled();
     ({ page } = session);
+    abortHandler = () => {
+      logWarn("Crawl cancellation requested", `jobId=${jobId || ""}`);
+      session.close().catch(() => {});
+    };
+
+    if (abortSignal) {
+      abortSignal.addEventListener("abort", abortHandler, { once: true });
+    }
+
+    startLiveDebugTicker();
+
+    throwIfCancelled();
     await page.goto(url, { waitUntil: "networkidle2" });
+    throwIfCancelled();
     await ensureLoggedInIfNeeded(page, profile, { loginCredentials });
+    throwIfCancelled();
 
     logStep("Navigating to last page before crawl");
     const lastUrl = await jumpToLastPage(page, profile);
@@ -211,6 +288,7 @@ export async function runCrawlPipeline({
     }
 
     while (true) {
+      throwIfCancelled();
       const currentUrl = page.url();
       if (visitedUrls.has(currentUrl)) {
         logWarn("Detected repeated page URL, stopping pagination", currentUrl);
@@ -302,6 +380,7 @@ export async function runCrawlPipeline({
       });
 
       const previousUrl = await clickPreviousPage(page, profile);
+      throwIfCancelled();
       if (!previousUrl) {
         break;
       }
@@ -328,6 +407,7 @@ export async function runCrawlPipeline({
       }, { forceScreenshot: true });
 
       for (const circle of allCircles.values()) {
+        throwIfCancelled();
         try {
           const detail = await scrapeCircleDetail(page, {
             circleId: circle.circle_id,
@@ -372,6 +452,10 @@ export async function runCrawlPipeline({
       logInfo("Detail crawl skipped", `mode=${crawlMode}`);
     }
   } catch (error) {
+    if (abortSignal?.aborted || error?.code === "CRAWL_CANCELLED") {
+      throw createCancelledError();
+    }
+
     try {
       const screenshot = await captureFailureScreenshot(page, { crawlMode });
       if (screenshot?.relativePath && error && typeof error === "object") {
@@ -384,7 +468,16 @@ export async function runCrawlPipeline({
 
     throw error;
   } finally {
-    await session.close();
+    if (liveDebugTimer) {
+      clearInterval(liveDebugTimer);
+      liveDebugTimer = null;
+    }
+
+    if (abortSignal && abortHandler) {
+      abortSignal.removeEventListener("abort", abortHandler);
+    }
+
+    await session.close().catch(() => {});
   }
 
   const pagesProcessed = pageSummaries.length;

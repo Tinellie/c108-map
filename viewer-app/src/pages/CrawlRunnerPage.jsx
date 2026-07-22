@@ -56,6 +56,10 @@ function statusColor(status) {
     return "error";
   }
 
+  if (status === "cancelled") {
+    return "default";
+  }
+
   return "default";
 }
 
@@ -131,6 +135,7 @@ export function CrawlRunnerPage() {
   const [actionError, setActionError] = useState("");
   const [actionMessage, setActionMessage] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [cancelling, setCancelling] = useState(false);
 
   const crawlModeOptions = Array.isArray(options?.crawlModes) && options.crawlModes.length > 0
     ? options.crawlModes
@@ -237,6 +242,31 @@ export function CrawlRunnerPage() {
     }
   }
 
+  async function cancelJob() {
+    if (!runningJob || runningJob.status !== "running" || cancelling) {
+      return;
+    }
+
+    setCancelling(true);
+    setActionError("");
+    setActionMessage("");
+
+    try {
+      const response = await fetch(`${CRAWL_JOBS_API}/current/cancel`, {
+        method: "POST"
+      });
+
+      const json = await readJson(response);
+      setRunningJob(json.data || null);
+      setActionMessage("已发送取消请求");
+      await refreshJobs();
+    } catch (error) {
+      setActionError(error.message || "取消任务失败");
+    } finally {
+      setCancelling(false);
+    }
+  }
+
   return (
     <Box sx={{ minHeight: "100vh", pb: 6 }}>
       <Container maxWidth="lg" sx={{ pt: 4 }}>
@@ -267,9 +297,19 @@ export function CrawlRunnerPage() {
                   ))}
                 </Select>
               </FormControl>
-              <Button variant="contained" onClick={startJob} disabled={!canSubmit}>
-                {submitting ? "启动中..." : "开始抓取"}
-              </Button>
+              <Stack direction="row" spacing={1} sx={{ ml: { md: "auto" } }}>
+                <Button variant="contained" onClick={startJob} disabled={!canSubmit}>
+                  {submitting ? "启动中..." : "开始抓取"}
+                </Button>
+                <Button
+                  variant="outlined"
+                  color="error"
+                  onClick={cancelJob}
+                  disabled={!runningJob || runningJob.status !== "running" || cancelling}
+                >
+                  {cancelling ? "取消中..." : "取消任务"}
+                </Button>
+              </Stack>
             </Stack>
 
             <Paper variant="outlined" sx={{ p: 2 }}>
@@ -335,6 +375,11 @@ export function CrawlRunnerPage() {
                       {runningJob.progress.message ? (
                         <Typography variant="body2" color="text.secondary">
                           {runningJob.progress.message}
+                        </Typography>
+                      ) : null}
+                      {runningJob.progress.debugLog ? (
+                        <Typography variant="caption" color="text.secondary" sx={{ fontFamily: "monospace" }}>
+                          {runningJob.progress.debugLog}
                         </Typography>
                       ) : null}
                       {getLiveScreenshotSrc(runningJob.progress) ? (
