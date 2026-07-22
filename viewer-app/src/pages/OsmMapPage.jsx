@@ -53,6 +53,22 @@ function normalizeSignedDegrees(value) {
   return normalized > 180 ? normalized - 360 : normalized;
 }
 
+function resolveCompassHeading(event) {
+  const webkitCompassHeading = Number(event?.webkitCompassHeading);
+  if (Number.isFinite(webkitCompassHeading)) {
+    return webkitCompassHeading;
+  }
+
+  if (event?.absolute === true) {
+    const alpha = Number(event?.alpha);
+    if (Number.isFinite(alpha)) {
+      return alpha;
+    }
+  }
+
+  return null;
+}
+
 async function readJson(response) {
   const json = await response.json().catch(() => ({}));
   if (!response.ok) {
@@ -1884,18 +1900,21 @@ export function OsmMapPage({ isUserMode = true, enableEditTools = true }) {
     }
 
     const handleDeviceOrientation = (event) => {
-      const alpha = Number(event?.alpha);
-      if (!Number.isFinite(alpha)) {
+      const heading = resolveCompassHeading(event);
+      if (!Number.isFinite(heading)) {
         return;
       }
 
-      const nextRotation = normalizeSignedDegrees(alpha);
+      const nextRotation = normalizeSignedDegrees(heading);
       setMapRotationDeg(roundCoordinate(nextRotation));
     };
 
-    window.addEventListener("deviceorientation", handleDeviceOrientation, true);
+    const absoluteEventSupported = typeof window !== "undefined" && "ondeviceorientationabsolute" in window;
+    const orientationEventName = absoluteEventSupported ? "deviceorientationabsolute" : "deviceorientation";
+
+    window.addEventListener(orientationEventName, handleDeviceOrientation, true);
     return () => {
-      window.removeEventListener("deviceorientation", handleDeviceOrientation, true);
+      window.removeEventListener(orientationEventName, handleDeviceOrientation, true);
     };
   }, [gyroSupported, useGyroRotation]);
 
