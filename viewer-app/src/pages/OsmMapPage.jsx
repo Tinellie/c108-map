@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Box, Button, Checkbox, Collapse, FormControl, FormControlLabel, InputLabel, MenuItem, Paper, Select, Slider, Stack, TextField, Typography } from "@mui/material";
+import { Accordion, AccordionDetails, AccordionSummary, Box, Button, Checkbox, FormControl, FormControlLabel, InputLabel, List, ListItem, ListItemIcon, ListItemText, MenuItem, Paper, Select, Slider, Stack, TextField, Typography } from "@mui/material";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import railwayRHtml from "../statics/railway-r.html?raw";
 import railwayUHtml from "../statics/railway-u.html?raw";
@@ -13,6 +13,7 @@ const MAP_PAGES_API = withApiBaseUrl("/api/map/pages");
 const FAVORITE_CIRCLES_API = withApiBaseUrl("/api/favorite-circles");
 const STORAGE_BASE_URL = import.meta.env.VITE_STORAGE_BASE_URL || withApiBaseUrl("");
 const EDITOR_OVERLAY_STORAGE_KEY = "osm-map-editor-overlay-transforms";
+const OSM_MAP_LOCAL_FILTERS_STORAGE_KEY = "osm-map-local-filters";
 const LOCKED_OSM_FILE = "8__.osm";
 const GRID_WORLD_STEP = 100;
 const HIGHWAY_TOP_LAYER = 100;
@@ -45,6 +46,11 @@ const COLOR_INDEX_OPTIONS = Object.keys(COLOR_LABELS)
 
 function clamp(value, min, max) {
   return Math.min(max, Math.max(min, value));
+}
+
+function normalizeSignedDegrees(value) {
+  const normalized = ((Number(value) % 360) + 360) % 360;
+  return normalized > 180 ? normalized - 360 : normalized;
 }
 
 async function readJson(response) {
@@ -358,9 +364,9 @@ function normalizeUiPreferences(preferences) {
   if (!preferences || typeof preferences !== "object") {
     return {
       selectedCircleDay: "day1",
-      selectedLabelColorIndexes: [],
+      selectedLabelColorIndexes: [...COLOR_INDEX_OPTIONS],
       selectedPathHighlightIds: [],
-      selectedLevels: [],
+      selectedLevels: [...USER_MODE_DEFAULT_LEVELS],
       hiddenHallLabels: []
     };
   }
@@ -394,6 +400,41 @@ function normalizeUiPreferences(preferences) {
     selectedLevels,
     hiddenHallLabels
   };
+}
+
+function readLocalFilterPreferences() {
+  if (typeof window === "undefined") {
+    return { selectedLabelColorIndexes: [...COLOR_INDEX_OPTIONS] };
+  }
+
+  try {
+    const saved = JSON.parse(window.localStorage.getItem(OSM_MAP_LOCAL_FILTERS_STORAGE_KEY) || "null");
+    const selectedLabelColorIndexes = [...new Set(
+      (Array.isArray(saved?.selectedLabelColorIndexes) ? saved.selectedLabelColorIndexes : COLOR_INDEX_OPTIONS)
+        .map((value) => Number(value))
+        .filter((value) => COLOR_INDEX_OPTIONS.includes(value))
+    )].sort((left, right) => left - right);
+
+    return {
+      selectedLabelColorIndexes: selectedLabelColorIndexes.length ? selectedLabelColorIndexes : [...COLOR_INDEX_OPTIONS]
+    };
+  } catch {
+    return { selectedLabelColorIndexes: [...COLOR_INDEX_OPTIONS] };
+  }
+}
+
+function saveLocalFilterPreferences(preferences) {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  window.localStorage.setItem(OSM_MAP_LOCAL_FILTERS_STORAGE_KEY, JSON.stringify({
+    selectedLabelColorIndexes: [...new Set(
+      (Array.isArray(preferences?.selectedLabelColorIndexes) ? preferences.selectedLabelColorIndexes : [])
+        .map((value) => Number(value))
+        .filter((value) => COLOR_INDEX_OPTIONS.includes(value))
+    )].sort((left, right) => left - right)
+  }));
 }
 
 function readSavedEditorOverlayTransforms() {
@@ -618,6 +659,25 @@ function drawScreenAlignedText(context, text, x, y, fontSize, color, rotationDeg
   context.textBaseline = "middle";
   context.font = `${fontSize}px sans-serif`;
   context.fillText(label, x, y);
+  context.restore();
+}
+
+function drawScreenAlignedOutlinedText(context, text, x, y, fontSize, fillColor, strokeColor, strokeWidth, rotationDeg = 0, extraRotationDeg = 0) {
+  const label = String(text || "").trim();
+  if (!label) {
+    return;
+  }
+  context.save();
+  context.translate(x, y);
+  context.rotate(((-rotationDeg + extraRotationDeg) * Math.PI) / 180);
+  context.fillStyle = fillColor;
+  context.strokeStyle = strokeColor;
+  context.lineWidth = strokeWidth;
+  context.textAlign = "center";
+  context.textBaseline = "middle";
+  context.font = `${fontSize}px "Noto Sans CJK TC", "Microsoft JhengHei", sans-serif`;
+  context.strokeText(label, 0, 0);
+  context.fillText(label, 0, 0);
   context.restore();
 }
 
@@ -1267,13 +1327,15 @@ function drawEditorOverlayEntities(context, page, graph, overlay, {
     if (!boothEntity?.boothNumber) {
       return null;
     }
-    const boothNumberText = String(boothEntity.boothNumber || "").trim();
-    const suffix = normalizeBoothSuffix(boothEntity.boothSuffix);
-    const islandCode = findBoothIslandCodeFromGraph(graph, boothEntity);
-    if (!islandCode) {
+    const fullKey = getBoothFullKey(boothEntity);
+    if (!fullKey) {
       return null;
     }
-    const fullKey = `${islandCode}|${boothNumberText}|${suffix}`;
+    const info = circleBoothLabelByFullKey?.get(fullKey);
+    const colorIndex = Number(info?.colorIndex);
+    if (!selectedLabelColorIndexSet?.has(colorIndex)) {
+      return null;
+    }
     const color = circleBoothColorByFullKey?.get(fullKey) || null;
     return color ? withAlpha(color, 0.48) : null;
   };
@@ -1667,14 +1729,16 @@ export function OsmMapPage({ isUserMode = true, enableEditTools = true }) {
   const [stationMarkers, setStationMarkers] = useState([]);
   const [selectedCircleDay, setSelectedCircleDay] = useState("day1");
   const [circleRows, setCircleRows] = useState([]);
-  const [selectedLabelColorIndexes, setSelectedLabelColorIndexes] = useState([]);
+  const [selectedLabelColorIndexes, setSelectedLabelColorIndexes] = useState(() => readLocalFilterPreferences().selectedLabelColorIndexes);
   const [selectedBoothCircle, setSelectedBoothCircle] = useState(null);
   const [isHoverClickableBooth, setIsHoverClickableBooth] = useState(false);
   const [isHallLabelPanelOpen, setIsHallLabelPanelOpen] = useState(true);
+  const [isColorFilterPanelOpen, setIsColorFilterPanelOpen] = useState(false);
+  const [isLevelPanelOpen, setIsLevelPanelOpen] = useState(false);
   const [hiddenHallLabels, setHiddenHallLabels] = useState([]);
   const [isSpacePressed, setIsSpacePressed] = useState(false);
   const [isPanning, setIsPanning] = useState(false);
-  const [selectedLevels, setSelectedLevels] = useState([]);
+  const [selectedLevels, setSelectedLevels] = useState([...USER_MODE_DEFAULT_LEVELS]);
   const [selectedPathHighlightIds, setSelectedPathHighlightIds] = useState([]);
   const [editorPages, setEditorPages] = useState([]);
   const [loadedEditorPageNumbers, setLoadedEditorPageNumbers] = useState([]);
@@ -1688,6 +1752,7 @@ export function OsmMapPage({ isUserMode = true, enableEditTools = true }) {
   const [editorBoothLabelOffsets, setEditorBoothLabelOffsets] = useState({});
   const [selectedEditorEntityId, setSelectedEditorEntityId] = useState("");
   const [mapRotationDeg, setMapRotationDeg] = useState(34);
+  const [useGyroRotation, setUseGyroRotation] = useState(false);
   const [viewState, setViewState] = useState({ zoom: 1, offsetX: 0, offsetY: 0 });
   const stepConnectorVisibleWayIds = useMemo(() => getStepConnectorVisibleWayIds(ways, selectedLevels), [ways, selectedLevels]);
   const selectedEditorPage = useMemo(
@@ -1804,10 +1869,32 @@ export function OsmMapPage({ isUserMode = true, enableEditTools = true }) {
     () => selectedEditorPage ? editorGraphByPage.get(selectedEditorPage.page) || buildEditorEntityGraph(selectedEditorPage) : null,
     [editorGraphByPage, selectedEditorPage]
   );
+  const gyroSupported = typeof window !== "undefined" && typeof window.DeviceOrientationEvent !== "undefined";
 
   useEffect(() => {
     viewStateRef.current = viewState;
   }, [viewState]);
+
+  useEffect(() => {
+    if (!useGyroRotation || !gyroSupported) {
+      return;
+    }
+
+    const handleDeviceOrientation = (event) => {
+      const alpha = Number(event?.alpha);
+      if (!Number.isFinite(alpha)) {
+        return;
+      }
+
+      const nextRotation = normalizeSignedDegrees(-alpha);
+      setMapRotationDeg(roundCoordinate(nextRotation));
+    };
+
+    window.addEventListener("deviceorientation", handleDeviceOrientation, true);
+    return () => {
+      window.removeEventListener("deviceorientation", handleDeviceOrientation, true);
+    };
+  }, [gyroSupported, useGyroRotation]);
 
   useEffect(() => {
     editorBoothLabelOffsetsRef.current = editorBoothLabelOffsets;
@@ -2101,8 +2188,12 @@ export function OsmMapPage({ isUserMode = true, enableEditTools = true }) {
     }
     setShowEditorOverlay(true);
     setLoadedEditorPageNumbers(allEditorPageNumbers);
-    setSelectedLevels((current) => (current.length ? current : [...USER_MODE_DEFAULT_LEVELS]));
+    setSelectedLevels([...USER_MODE_DEFAULT_LEVELS]);
   }, [allEditorPageNumbers, editorPages.length, isUserMode]);
+
+  useEffect(() => {
+    saveLocalFilterPreferences({ selectedLabelColorIndexes });
+  }, [selectedLabelColorIndexes]);
 
   useEffect(() => {
     let isMounted = true;
@@ -2127,6 +2218,7 @@ export function OsmMapPage({ isUserMode = true, enableEditTools = true }) {
         );
 
         const savedTransforms = await readSavedEditorOverlayTransformsFromApi() || readSavedEditorOverlayTransforms();
+        const localFilterPreferences = readLocalFilterPreferences();
         const pages = applySavedEditorTransforms(
           pagePayloads
             .filter(Boolean)
@@ -2148,9 +2240,9 @@ export function OsmMapPage({ isUserMode = true, enableEditTools = true }) {
         setEditorPageIslandLabelSettings(nextPageIslandLabelSettings);
         setEditorBoothLabelOffsets(nextBoothLabelOffsets);
         setSelectedCircleDay(savedUiPreferences.selectedCircleDay);
-        setSelectedLabelColorIndexes(savedUiPreferences.selectedLabelColorIndexes);
+        setSelectedLabelColorIndexes(localFilterPreferences.selectedLabelColorIndexes);
         setSelectedPathHighlightIds(savedUiPreferences.selectedPathHighlightIds);
-        setSelectedLevels(savedUiPreferences.selectedLevels);
+        setSelectedLevels([...USER_MODE_DEFAULT_LEVELS]);
         setHiddenHallLabels(savedUiPreferences.hiddenHallLabels);
         const firstPageNumber = pages[0]?.page || 1;
         setLoadedEditorPageNumbers(pages.map((page) => page.page));
@@ -2167,6 +2259,8 @@ export function OsmMapPage({ isUserMode = true, enableEditTools = true }) {
         setEditorPageOverlays({});
         setEditorPageIslandLabelSettings({});
         setEditorBoothLabelOffsets({});
+        setSelectedLabelColorIndexes(readLocalFilterPreferences().selectedLabelColorIndexes);
+        setSelectedLevels([...USER_MODE_DEFAULT_LEVELS]);
         setHiddenHallLabels([]);
         uiPreferencesHydratedRef.current = true;
         setShowEditorOverlay(false);
@@ -2342,12 +2436,18 @@ export function OsmMapPage({ isUserMode = true, enableEditTools = true }) {
           return;
         }
         const center = getWayCenter(way);
-        context.font = `${Math.max(11, 13 / Math.max(viewState.zoom, 0.0001))}px "Noto Sans CJK TC", "Microsoft JhengHei", sans-serif`;
-        context.lineWidth = Math.max(1, 2.6 / Math.max(viewState.zoom, 0.0001));
-        context.strokeStyle = "rgba(255, 255, 255, 0.88)";
-        context.fillStyle = style.hallLabelColor || "#404246";
-        context.strokeText(style.hallLabel, center.x, center.y);
-        context.fillText(style.hallLabel, center.x, center.y);
+        drawScreenAlignedOutlinedText(
+          context,
+          style.hallLabel,
+          center.x,
+          center.y,
+          Math.max(11, 13 / Math.max(viewState.zoom, 0.0001)),
+          style.hallLabelColor || "#404246",
+          "rgba(255, 255, 255, 0.88)",
+          Math.max(1, 2.6 / Math.max(viewState.zoom, 0.0001)),
+          mapRotationDeg,
+          0
+        );
       });
       if (showEditorOverlay && loadedEditorPages.length) {
         const renderedBoothLabels = [];
@@ -2405,10 +2505,11 @@ export function OsmMapPage({ isUserMode = true, enableEditTools = true }) {
   }, [circleBoothColorMaps, editorBoothLabelOffsets, editorGraphByPage, editorOverlay, editorPageIslandLabelSettings, editorPageOverlays, effectiveShowEditorLabels, isUserMode, loadedEditorPages, mapRotationDeg, selectedEditorEntityId, selectedEditorPageNumber, selectedLabelColorIndexSet, selectedLevels, showEditorOverlay, styledWays, viewState]);
 
   function toggleSelectedLevel(level) {
-    if (isUserMode && level > 2) {
+    const nextLevel = Number(level);
+    if (!USER_MODE_DEFAULT_LEVELS.includes(nextLevel)) {
       return;
     }
-    setSelectedLevels((current) => current.includes(level) ? current.filter((item) => item !== level) : [...current, level].sort((left, right) => left - right));
+    setSelectedLevels([...USER_MODE_DEFAULT_LEVELS]);
   }
 
   function toggleLabelColorIndex(colorIndex) {
@@ -2417,10 +2518,9 @@ export function OsmMapPage({ isUserMode = true, enableEditTools = true }) {
       : [...current, colorIndex].sort((left, right) => left - right));
   }
 
-  function togglePathHighlight(pathId) {
-    setSelectedPathHighlightIds((current) => current.includes(pathId)
-      ? current.filter((item) => item !== pathId)
-      : [...current, pathId]);
+  function selectPathHighlight(pathId) {
+    const nextPathId = String(pathId || "").trim();
+    setSelectedPathHighlightIds(nextPathId ? [nextPathId] : []);
   }
 
   function toggleHiddenHallLabel(label) {
@@ -2432,9 +2532,7 @@ export function OsmMapPage({ isUserMode = true, enableEditTools = true }) {
   function collectUiPreferences() {
     return normalizeUiPreferences({
       selectedCircleDay,
-      selectedLabelColorIndexes,
       selectedPathHighlightIds,
-      selectedLevels,
       hiddenHallLabels
     });
   }
@@ -2549,7 +2647,7 @@ export function OsmMapPage({ isUserMode = true, enableEditTools = true }) {
         uiPreferencesSaveTimerRef.current = null;
       }
     };
-  }, [editorPages.length, enableEditTools, hiddenHallLabels, selectedCircleDay, selectedLabelColorIndexes, selectedPathHighlightIds, selectedLevels]);
+  }, [editorPages.length, enableEditTools, hiddenHallLabels, selectedCircleDay, selectedPathHighlightIds]);
 
   function nudgeEditorOverlay(deltaX, deltaY) {
     setEditorOverlay((current) => ({
@@ -2930,6 +3028,35 @@ export function OsmMapPage({ isUserMode = true, enableEditTools = true }) {
     });
   }
 
+  async function handleGyroRotationToggle(checked) {
+    if (!checked) {
+      setUseGyroRotation(false);
+      setMapRotationDeg(34);
+      return;
+    }
+
+    if (!gyroSupported) {
+      setUseGyroRotation(false);
+      return;
+    }
+
+    const requestPermission = window.DeviceOrientationEvent?.requestPermission;
+    if (typeof requestPermission === "function") {
+      try {
+        const result = await requestPermission();
+        if (result !== "granted") {
+          setUseGyroRotation(false);
+          return;
+        }
+      } catch {
+        setUseGyroRotation(false);
+        return;
+      }
+    }
+
+    setUseGyroRotation(true);
+  }
+
   return (
     <Box sx={{ position: "relative", width: "100%", height: "100vh", overflow: "hidden", bgcolor: "#f6f4ef" }}>
       <Stack
@@ -2945,13 +3072,13 @@ export function OsmMapPage({ isUserMode = true, enableEditTools = true }) {
         <Paper
           elevation={4}
           sx={{
-            p: 1.5,
             border: "1px solid #d9d4c6",
             bgcolor: "rgba(255, 255, 255, 0.9)",
-            backdropFilter: "blur(3px)"
+            backdropFilter: "blur(3px)",
+            overflow: "hidden"
           }}
         >
-          <Stack spacing={1.25}>
+          <Stack spacing={1} sx={{ p: 1.25 }}>
             <FormControl size="small" fullWidth>
               <InputLabel id="circle-day-select-label">日期</InputLabel>
               <Select
@@ -2964,36 +3091,64 @@ export function OsmMapPage({ isUserMode = true, enableEditTools = true }) {
                 <MenuItem value="day2">二日目(日)</MenuItem>
               </Select>
             </FormControl>
-            <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>颜色筛选</Typography>
-            <Stack spacing={0.15}>
-              {COLOR_INDEX_OPTIONS.map((colorIndex) => {
-                const checked = selectedLabelColorIndexes.includes(colorIndex);
-                return (
-                  <FormControlLabel
-                    key={colorIndex}
-                    control={<Checkbox size="small" checked={checked} onChange={() => toggleLabelColorIndex(colorIndex)} sx={{ p: 0.18 }} />}
-                    label={
-                      <Stack direction="row" alignItems="center" spacing={0.65}>
+            <Accordion
+              disableGutters
+              elevation={0}
+              expanded={isColorFilterPanelOpen}
+              onChange={(_, expanded) => setIsColorFilterPanelOpen(expanded)}
+              sx={{ bgcolor: "transparent", "&::before": { display: "none" } }}
+            >
+              <AccordionSummary expandIcon={<ExpandMoreIcon />} sx={{ minHeight: 36, px: 0.25, "& .MuiAccordionSummary-content": { my: 0 } }}>
+                <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>颜色筛选</Typography>
+              </AccordionSummary>
+              <AccordionDetails sx={{ px: 0, py: 0 }}>
+                <List dense disablePadding>
+                {COLOR_INDEX_OPTIONS.map((colorIndex) => {
+                  const checked = selectedLabelColorIndexes.includes(colorIndex);
+                  return (
+                    <ListItem
+                      key={colorIndex}
+                      disableGutters
+                      dense
+                      secondaryAction={<Checkbox edge="end" size="small" checked={checked} disabled onChange={() => toggleLabelColorIndex(colorIndex)} />}
+                      sx={{ py: 0, pr: 0 }}
+                    >
+                      <ListItemIcon sx={{ minWidth: 22 }}>
                         <Box sx={{ width: 9, height: 9, borderRadius: "50%", bgcolor: badgeColor(colorIndex), border: "1px solid rgba(0,0,0,0.14)" }} />
-                        <Typography sx={{ fontSize: 11.5, lineHeight: 1.1 }}>{COLOR_LABELS[colorIndex]}</Typography>
-                      </Stack>
-                    }
-                    sx={{ m: 0, "& .MuiFormControlLabel-label": { m: 0 } }}
-                  />
-                );
-              })}
-            </Stack>
-            <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>层级</Typography>
-            <Stack spacing={0.25}>
-              {[1, 2, 3, 4].map((level) => (
-                <FormControlLabel
-                  key={level}
-                  control={<Checkbox size="small" checked={selectedLevels.includes(level)} onChange={() => toggleSelectedLevel(level)} disabled={isUserMode && level > 2} />}
-                  label={`L${level}`}
-                  sx={{ m: 0, "& .MuiFormControlLabel-label": { fontSize: 13 } }}
-                />
-              ))}
-            </Stack>
+                      </ListItemIcon>
+                      <ListItemText primary={COLOR_LABELS[colorIndex]} primaryTypographyProps={{ fontSize: 12, lineHeight: 1.2 }} />
+                    </ListItem>
+                  );
+                })}
+                </List>
+              </AccordionDetails>
+            </Accordion>
+            <Accordion
+              disableGutters
+              elevation={0}
+              expanded={isLevelPanelOpen}
+              onChange={(_, expanded) => setIsLevelPanelOpen(expanded)}
+              sx={{ bgcolor: "transparent", "&::before": { display: "none" } }}
+            >
+              <AccordionSummary expandIcon={<ExpandMoreIcon />} sx={{ minHeight: 36, px: 0.25, "& .MuiAccordionSummary-content": { my: 0 } }}>
+                <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>层级</Typography>
+              </AccordionSummary>
+              <AccordionDetails sx={{ px: 0, py: 0 }}>
+                <List dense disablePadding>
+                {[1, 2, 3, 4].map((level) => (
+                  <ListItem
+                    key={level}
+                    disableGutters
+                    dense
+                    secondaryAction={<Checkbox edge="end" size="small" checked={selectedLevels.includes(level)} disabled />}
+                    sx={{ py: 0, pr: 0 }}
+                  >
+                    <ListItemText primary={`L${level}`} primaryTypographyProps={{ fontSize: 12, lineHeight: 1.2 }} />
+                  </ListItem>
+                ))}
+                </List>
+              </AccordionDetails>
+            </Accordion>
             <Stack spacing={0.5}>
               <Typography variant="body2" sx={{ fontWeight: 600 }}>地图旋转</Typography>
               <Slider
@@ -3010,6 +3165,20 @@ export function OsmMapPage({ isUserMode = true, enableEditTools = true }) {
                   }
                 }}
               />
+              <FormControlLabel
+                control={(
+                  <Checkbox
+                    size="small"
+                    checked={useGyroRotation}
+                    onChange={(event) => {
+                      void handleGyroRotationToggle(event.target.checked);
+                    }}
+                    disabled={!gyroSupported}
+                  />
+                )}
+                label="陀螺仪旋转"
+                sx={{ m: 0, "& .MuiFormControlLabel-label": { fontSize: 12 } }}
+              />
             </Stack>
           </Stack>
         </Paper>
@@ -3017,34 +3186,27 @@ export function OsmMapPage({ isUserMode = true, enableEditTools = true }) {
         <Paper
           elevation={4}
           sx={{
-            p: 1.5,
             border: "1px solid #d9d4c6",
             bgcolor: "rgba(255, 255, 255, 0.9)",
             backdropFilter: "blur(3px)"
           }}
         >
-          <Stack spacing={1.25}>
+          <Stack spacing={1} sx={{ p: 1.25 }}>
             <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>路径高亮</Typography>
-            <Stack spacing={0.25}>
-              {PATH_HIGHLIGHT_OPTIONS.map((option) => (
-                <FormControlLabel
-                  key={option.id}
-                  control={<Checkbox size="small" checked={selectedPathHighlightIds.includes(option.id)} onChange={() => togglePathHighlight(option.id)} />}
-                  label={option.label}
-                  sx={{
-                    m: 0,
-                    alignItems: "flex-start",
-                    "& .MuiFormControlLabel-label": {
-                      fontSize: 13,
-                      color: option.color,
-                      fontWeight: 700,
-                      lineHeight: 1.3,
-                      mt: "2px"
-                    }
-                  }}
-                />
-              ))}
-            </Stack>
+            <FormControl size="small" fullWidth>
+              <InputLabel id="path-highlight-select-label">高亮类型</InputLabel>
+              <Select
+                labelId="path-highlight-select-label"
+                label="高亮类型"
+                value={selectedPathHighlightIds[0] || ""}
+                onChange={(event) => selectPathHighlight(event.target.value)}
+              >
+                <MenuItem value="">无</MenuItem>
+                {PATH_HIGHLIGHT_OPTIONS.map((option) => (
+                  <MenuItem key={option.id} value={option.id}>{option.label}</MenuItem>
+                ))}
+              </Select>
+            </FormControl>
           </Stack>
         </Paper>
       </Stack>
@@ -3310,7 +3472,7 @@ export function OsmMapPage({ isUserMode = true, enableEditTools = true }) {
               position: "absolute",
               left: marker.screenPoint.x,
               top: marker.screenPoint.y,
-              transform: `translate(-50%, -50%) rotate(${mapRotationDeg}deg) scale(${viewState.zoom * marker.scale})`,
+              transform: `translate(-50%, -50%) scale(${viewState.zoom * marker.scale})`,
               transformOrigin: "center",
               zIndex: 3,
               fontFamily: "sans-serif",
