@@ -38,9 +38,17 @@ export default function App() {
   const [isNavExpanded, setIsNavExpanded] = useState(false);
   const [isUserMode, setIsUserMode] = useState(true);
   const [authState, setAuthState] = useState({ status: "checking" });
+  const isAdminUser = String(authState?.user?.role || "").toLowerCase() === "admin";
+  const effectiveUserMode = isAdminUser ? isUserMode : true;
 
   const shouldCollapseNav = location.pathname === "/map-editor" || location.pathname === "/osm-map" || location.pathname === "/edit-map";
-  const visibleNavItems = NAV_ITEMS.filter((item) => item.userMode || !isUserMode);
+  const visibleNavItems = NAV_ITEMS.filter((item) => item.userMode || !effectiveUserMode);
+
+  useEffect(() => {
+    if (!isAdminUser) {
+      setIsUserMode(true);
+    }
+  }, [isAdminUser]);
 
   useEffect(() => {
     if (!shouldCollapseNav) {
@@ -123,11 +131,15 @@ export default function App() {
               </Button>
             ))}
             <Box sx={{ flex: 1 }} />
-            <FormControlLabel
-              control={<Switch size="small" checked={isUserMode} onChange={(event) => setIsUserMode(event.target.checked)} />}
-              label="浏览模式"
-              sx={{ m: 0, ml: "auto", flexShrink: 0, whiteSpace: "nowrap" }}
-            />
+            {isAdminUser ? (
+              <FormControlLabel
+                control={<Switch size="small" checked={isUserMode} onChange={(event) => setIsUserMode(event.target.checked)} />}
+                label="浏览模式"
+                sx={{ m: 0, ml: "auto", flexShrink: 0, whiteSpace: "nowrap" }}
+              />
+            ) : (
+              <Box sx={{ ml: "auto" }} />
+            )}
             <Button size="small" color="inherit" onClick={handleLogout}>退出</Button>
           </Stack>
         </Toolbar>
@@ -165,10 +177,10 @@ export default function App() {
           <Route path="/" element={<Navigate to="/viewer" replace />} />
           <Route path="/login" element={<Navigate to="/viewer" replace />} />
           <Route path="/viewer" element={<CirclesViewerPage />} />
-          <Route path="/crawler" element={<CrawlRunnerPage />} />
+          <Route path="/crawler" element={isAdminUser ? <CrawlRunnerPage /> : <Navigate to="/viewer" replace />} />
           <Route path="/osm-map" element={<OsmMapPage isUserMode={true} enableEditTools={false} />} />
-          <Route path="/map-editor" element={<MapEditorPage />} />
-          <Route path="/edit-map" element={<OsmMapPage isUserMode={isUserMode} enableEditTools={!isUserMode} />} />
+          <Route path="/map-editor" element={isAdminUser ? <MapEditorPage /> : <Navigate to="/viewer" replace />} />
+          <Route path="/edit-map" element={isAdminUser ? <OsmMapPage isUserMode={isUserMode} enableEditTools={!isUserMode} /> : <Navigate to="/viewer" replace />} />
         </Routes>
       </Suspense>
     </Box>

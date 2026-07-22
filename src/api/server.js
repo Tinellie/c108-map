@@ -154,6 +154,18 @@ function clearAuthCookie(res) {
   res.clearCookie(config.auth.sessionCookieName, getAuthCookieOptions());
 }
 
+function isAdminUser(user) {
+  return String(user?.role || "").toLowerCase() === "admin";
+}
+
+function requireAdmin(req, res, next) {
+  if (!isAdminUser(req.authUser)) {
+    return res.status(403).json({ message: "forbidden" });
+  }
+
+  return next();
+}
+
 function getRuntimeMapExtractionConfig() {
   return {
     pdfPath: path.join(projectRoot, config.map.pdfPath),
@@ -407,11 +419,11 @@ app.get("/api/health", async (_req, res) => {
   }
 });
 
-app.get("/api/crawl/options", (_req, res) => {
+app.get("/api/crawl/options", requireAdmin, (_req, res) => {
   res.json({ data: getCrawlOptions() });
 });
 
-app.post("/api/crawl/jobs", (req, res) => {
+app.post("/api/crawl/jobs", requireAdmin, (req, res) => {
   try {
     const { job } = startCrawlJob(req.body || {});
     res.status(202).json({ data: job });
@@ -429,7 +441,7 @@ app.post("/api/crawl/jobs", (req, res) => {
   }
 });
 
-app.get("/api/crawl/jobs/current", (_req, res) => {
+app.get("/api/crawl/jobs/current", requireAdmin, (_req, res) => {
   const currentJob = getCurrentCrawlJob();
   if (!currentJob) {
     return res.json({ data: null });
@@ -438,7 +450,7 @@ app.get("/api/crawl/jobs/current", (_req, res) => {
   res.json({ data: currentJob });
 });
 
-app.post("/api/crawl/jobs/current/cancel", (_req, res) => {
+app.post("/api/crawl/jobs/current/cancel", requireAdmin, (_req, res) => {
   try {
     const job = cancelCurrentCrawlJob();
     res.json({ data: job });
@@ -452,13 +464,13 @@ app.post("/api/crawl/jobs/current/cancel", (_req, res) => {
   }
 });
 
-app.get("/api/crawl/jobs", (req, res) => {
+app.get("/api/crawl/jobs", requireAdmin, (req, res) => {
   const limit = Number(req.query.limit || 10);
   const jobs = getCrawlJobHistory(limit);
   res.json({ data: jobs });
 });
 
-app.get("/api/crawl/jobs/:jobId", (req, res) => {
+app.get("/api/crawl/jobs/:jobId", requireAdmin, (req, res) => {
   const job = getCrawlJobById(req.params.jobId);
   if (!job) {
     return res.status(404).json({ message: "job not found" });
@@ -467,7 +479,7 @@ app.get("/api/crawl/jobs/:jobId", (req, res) => {
   res.json({ data: job });
 });
 
-app.get("/api/crawl/jobs/:jobId/live-screenshot", async (req, res) => {
+app.get("/api/crawl/jobs/:jobId/live-screenshot", requireAdmin, async (req, res) => {
   const job = getCrawlJobById(req.params.jobId);
   if (!job) {
     return res.status(404).json({ message: "job not found" });
@@ -498,7 +510,7 @@ app.get("/api/crawl/jobs/:jobId/live-screenshot", async (req, res) => {
   }
 });
 
-app.get("/api/crawl/jobs/:jobId/failure-screenshot", async (req, res) => {
+app.get("/api/crawl/jobs/:jobId/failure-screenshot", requireAdmin, async (req, res) => {
   const job = getCrawlJobById(req.params.jobId);
   if (!job) {
     return res.status(404).json({ message: "job not found" });
@@ -539,7 +551,7 @@ app.get("/api/color-preferences", async (_req, res) => {
   }
 });
 
-app.put("/api/color-preferences", async (req, res) => {
+app.put("/api/color-preferences", requireAdmin, async (req, res) => {
   try {
     const items = req.body?.items;
     await saveColorPreferences(items);
@@ -555,7 +567,7 @@ app.put("/api/color-preferences", async (req, res) => {
   }
 });
 
-app.get("/api/map/extraction", async (_req, res) => {
+app.get("/api/map/extraction", requireAdmin, async (_req, res) => {
   const startedAt = process.hrtime.bigint();
   try {
     logSubStep("Load map extraction defaults");
@@ -579,7 +591,7 @@ app.get("/api/map/extraction", async (_req, res) => {
   }
 });
 
-app.post("/api/map/extraction", async (_req, res) => {
+app.post("/api/map/extraction", requireAdmin, async (_req, res) => {
   const startedAt = process.hrtime.bigint();
   try {
     logSubStep("Prepare map extraction config");
@@ -596,7 +608,7 @@ app.post("/api/map/extraction", async (_req, res) => {
   }
 });
 
-app.get("/api/map/editor-snapshots", async (req, res) => {
+app.get("/api/map/editor-snapshots", requireAdmin, async (req, res) => {
   try {
     const limit = Math.min(Math.max(Number(req.query.limit) || 20, 1), 100);
     const snapshots = await listMapEditorSnapshots({ limit });
@@ -607,7 +619,7 @@ app.get("/api/map/editor-snapshots", async (req, res) => {
   }
 });
 
-app.get("/api/map/pages", async (_req, res) => {
+app.get("/api/map/pages", requireAdmin, async (_req, res) => {
   try {
     const meta = await readTransferredMapMeta();
     res.json({
@@ -626,7 +638,7 @@ app.get("/api/map/pages", async (_req, res) => {
   }
 });
 
-app.get("/api/map/pages/:page", async (req, res) => {
+app.get("/api/map/pages/:page", requireAdmin, async (req, res) => {
   try {
     const page = Math.max(1, Math.round(Number(req.params.page || 0)));
     if (!page) {
@@ -684,7 +696,7 @@ app.get("/api/osm/file", async (req, res) => {
   }
 });
 
-app.get("/api/map/editor-snapshots/latest", async (_req, res) => {
+app.get("/api/map/editor-snapshots/latest", requireAdmin, async (_req, res) => {
   try {
     const snapshot = await readLatestMapEditorSnapshot();
     if (!snapshot) {
@@ -698,7 +710,7 @@ app.get("/api/map/editor-snapshots/latest", async (_req, res) => {
   }
 });
 
-app.get("/api/map/editor-snapshots/overlay-transforms", async (_req, res) => {
+app.get("/api/map/editor-snapshots/overlay-transforms", requireAdmin, async (_req, res) => {
   try {
     const filePath = getOverlayTransformsPath();
     const raw = await fs.readFile(filePath, "utf-8");
@@ -717,7 +729,7 @@ app.get("/api/map/editor-snapshots/overlay-transforms", async (_req, res) => {
   }
 });
 
-app.put("/api/map/editor-snapshots/overlay-transforms", async (req, res) => {
+app.put("/api/map/editor-snapshots/overlay-transforms", requireAdmin, async (req, res) => {
   try {
     const payload = req.body;
     if (!payload || typeof payload !== "object") {
@@ -733,7 +745,7 @@ app.put("/api/map/editor-snapshots/overlay-transforms", async (req, res) => {
   }
 });
 
-app.get("/api/map/editor-snapshots/previous", async (req, res) => {
+app.get("/api/map/editor-snapshots/previous", requireAdmin, async (req, res) => {
   try {
     const saveId = String(req.query.saveId || "").trim();
     if (!saveId) {
@@ -756,7 +768,7 @@ app.get("/api/map/editor-snapshots/previous", async (req, res) => {
   }
 });
 
-app.get("/api/map/editor-snapshots/:saveId", async (req, res) => {
+app.get("/api/map/editor-snapshots/:saveId", requireAdmin, async (req, res) => {
   try {
     const saveId = String(req.params.saveId || "").trim();
     if (!saveId) {
@@ -779,7 +791,7 @@ app.get("/api/map/editor-snapshots/:saveId", async (req, res) => {
   }
 });
 
-app.post("/api/map/editor-snapshots", async (req, res) => {
+app.post("/api/map/editor-snapshots", requireAdmin, async (req, res) => {
   try {
     const pages = req.body?.pages;
     const summary = req.body?.summary;
@@ -795,7 +807,7 @@ app.post("/api/map/editor-snapshots", async (req, res) => {
   }
 });
 
-app.post("/api/map/editor-snapshots/transfer", async (req, res) => {
+app.post("/api/map/editor-snapshots/transfer", requireAdmin, async (req, res) => {
   try {
     const pages = req.body?.pages;
     const summary = req.body?.summary;
