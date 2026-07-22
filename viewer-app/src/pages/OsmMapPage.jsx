@@ -60,11 +60,12 @@ function extractNorthHeadingDegrees(event) {
   }
 
   const alpha = Number(event?.alpha);
-  if (!Number.isFinite(alpha)) {
+  const isAbsolute = Boolean(event?.absolute);
+  if (!isAbsolute || !Number.isFinite(alpha)) {
     return null;
   }
 
-  // Fallback: convert alpha to a north-based clockwise heading.
+  // Only use alpha when the browser marks it as absolute (north-referenced).
   return ((360 - alpha) % 360 + 360) % 360;
 }
 
