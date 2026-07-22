@@ -53,21 +53,6 @@ function normalizeSignedDegrees(value) {
   return normalized > 180 ? normalized - 360 : normalized;
 }
 
-function extractNorthHeadingDegrees(event) {
-  const compassHeading = Number(event?.webkitCompassHeading);
-  if (Number.isFinite(compassHeading)) {
-    return ((compassHeading % 360) + 360) % 360;
-  }
-
-  const alpha = Number(event?.alpha);
-  if (!Number.isFinite(alpha)) {
-    return null;
-  }
-
-  // Some Android browsers report absolute=false even when alpha is usable.
-  return ((360 - alpha) % 360 + 360) % 360;
-}
-
 async function readJson(response) {
   const json = await response.json().catch(() => ({}));
   if (!response.ok) {
@@ -1899,20 +1884,18 @@ export function OsmMapPage({ isUserMode = true, enableEditTools = true }) {
     }
 
     const handleDeviceOrientation = (event) => {
-      const headingDeg = extractNorthHeadingDegrees(event);
-      if (!Number.isFinite(headingDeg)) {
+      const alpha = Number(event?.alpha);
+      if (!Number.isFinite(alpha)) {
         return;
       }
 
-      const nextRotation = normalizeSignedDegrees(-headingDeg);
+      const nextRotation = normalizeSignedDegrees(alpha);
       setMapRotationDeg(roundCoordinate(nextRotation));
     };
 
     window.addEventListener("deviceorientation", handleDeviceOrientation, true);
-    window.addEventListener("deviceorientationabsolute", handleDeviceOrientation, true);
     return () => {
       window.removeEventListener("deviceorientation", handleDeviceOrientation, true);
-      window.removeEventListener("deviceorientationabsolute", handleDeviceOrientation, true);
     };
   }, [gyroSupported, useGyroRotation]);
 
@@ -2781,7 +2764,7 @@ export function OsmMapPage({ isUserMode = true, enableEditTools = true }) {
         y: (firstPointer.y + secondPointer.y) / 2
       }
     };
-  } 
+  }
 
   function applyZoomAtCanvasPoint(canvasPoint, zoomFactor) {
     if (!canvasPoint || !Number.isFinite(zoomFactor) || zoomFactor <= 0) {
